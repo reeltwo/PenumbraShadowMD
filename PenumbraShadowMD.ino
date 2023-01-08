@@ -646,7 +646,7 @@ void setup()
     SyR->stop(); 
 
     // //Setup for MD_SERIAL MarcDuino Dome Control Board
-    MD_SERIAL_INIT(motorControllerBaudRate);
+    MD_SERIAL_INIT(marcDuinoBaudRate);
 
     //Setup for BODY_MD_SERIAL Optional MarcDuino Control Board for Body Panels
     BODY_MD_SERIAL_INIT(marcDuinoBaudRate);
@@ -1699,19 +1699,11 @@ void onInitPS3NavDome()
 
 String getLastConnectedBtMAC()
 {
-    String btAddress = "";
-    for(int8_t i = 5; i > 0; i--)
-    {
-        if (Btd.disc_bdaddr[i]<0x10)
-        {
-            btAddress +="0";
-        }
-        btAddress += String(Btd.disc_bdaddr[i], HEX);
-        btAddress +=(":");
-    }
-    btAddress += String(Btd.disc_bdaddr[0], HEX);
-    btAddress.toUpperCase();
-    return btAddress; 
+    char buffer[20];
+    uint8_t* addr = Btd.disc_bdaddr;
+    snprintf(buffer, sizeof(buffer), "%02X:%02X:%02X:%02X:%02X:%02X",
+        addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+    return buffer;
 }
 
 bool criticalFaultDetect()
