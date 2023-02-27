@@ -7,7 +7,7 @@ This is a modified Shadow sketch to work with the Penumbra controller.
 <ul>
 <li>https://github.com/reeltwo/Reeltwo</li>
 <li>https://github.com/rimim/espsoftwareserial</li>
-<li>https://github.com/felis/USB_Host_Shield_2.0</li>
+<li>https://github.com/reeltwo/USB_Host_Shield_2.0</li>
 </ul>
 
 ## Build using Arduino IDE

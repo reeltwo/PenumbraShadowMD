@@ -1,7 +1,11 @@
 // =======================================================================================
+//                      Penumbra Shadow MD: Derived from SHADOW_MD
+// =======================================================================================
 //        SHADOW_MD:  Small Handheld Arduino Droid Operating Wand + MarcDuino
 // =======================================================================================
-//                          Last Revised Date: 08/23/2015
+//                          Last Revised Date: 01/08/2023
+//                             Revised By: skelmir
+//                        Previously Revised Date: 08/23/2015
 //                             Revised By: vint43
 //                Inspired by the PADAWAN / KnightShade SHADOW effort
 // =======================================================================================
@@ -22,23 +26,35 @@
 //         your droid and to validate and test all aspects of your droid control system.
 //
 // =======================================================================================
-//   Note: You will need a Arduino Mega ADK rev3 to run this sketch,
-//   as a normal Arduino (Uno, Duemilanove etc.) doesn't have enough SRAM and FLASH
+//   Note: You will need an ESP32 with a USB Host MAX3421 chip.
 //
-//   This is written to be a SPECIFIC Sketch - supporting only one type of controller
-//      - PS3 Move Navigation + MarcDuino Dome Controller & Optional Body Panel Controller
+//   Required Libraries:
+///
+//   https://github.com/reeltwo/Reeltwo
+//   https://github.com/rimim/espsoftwareserial
+//   https://github.com/felis/USB_Host_Shield_2.0
 //
-//   PS3 Bluetooth library - developed by Kristian Lauszus (kristianl@tkjelectronics.com)
-//   For more information visit my blog: http://blog.tkjelectronics.dk/ or
+// =======================================================================================
 //
 //   Sabertooth (Foot Drive):
 //         Set Sabertooth 2x32 or 2x25 Dip Switches: 1 and 2 Down, All Others Up
 //
 //   SyRen 10 Dome Drive:
 //         For SyRen packetized Serial Set Switches: 1, 2 and 4 Down, All Others Up
-//         NOTE:  Support for SyRen Simple Serial has been removed, due to problems.
-//         Please contact DimensionEngineering to get an RMA to flash your firmware
-//         Some place a 10K ohm resistor between S1 & GND on the SyRen 10 itself
+//
+// =======================================================================================
+//
+//   Cytron SmartDriveDuo MDDS30 (Foot Drive):
+//         Set Dip Switches 1,2,3 Up. 4,5,6 Down.
+//
+//   Cytron SmartDriveDuo MDDS10 (Dome Drive):
+//         Set Dip Switches 1,2,3,6 Up. 4,5 Down.
+//
+//   Set Dip Switches 7 and 8 for your battery type. 0 Down 1 Up.
+//      7:0 8:0 - LiPo
+//      7:0 8:1 - NiMH
+//      7:1 8:0 - SLA (Lead Acid)
+//      7:1 8:1 - No battery monitoring
 //
 // =======================================================================================
 //
@@ -49,6 +65,8 @@
 #define PANEL_COUNT 10                // Number of panels
 #define USE_DEBUG                     // Define to enable debug diagnostic
 #define USE_PREFERENCES
+#define USE_SABERTOOTH_PACKET_SERIAL
+//#define USE_CYTRON_PACKET_SERIAL
 
 #define PS3_CONTROLLER_FOOT_MAC       "XX:XX:XX:XX:XX:XX"  //Set this to your FOOT PS3 controller MAC address
 #define PS3_CONTROLLER_DOME_MAC       "XX:XX:XX:XX:XX:XX"  //Set to a secondary DOME PS3 controller MAC address (Optional)
@@ -260,9 +278,9 @@ int motorControllerBaudRate = 9600; // Set the baud rate for the Syren motor con
                                     // for packetized options are: 2400, 9600, 19200 and 38400
 
 int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controller
-                                    
-#define SYREN_ADDR         129      // Serial Address for Dome Syren
-#define SABERTOOTH_ADDR    128      // Serial Address for Foot Sabertooth
+
+#define FOOT_MOTOR_ADDR      128      // Serial Address for Foot Motor
+#define DOME_MOTOR_ADDR      129      // Serial Address for Dome Motor
 
 #define ENABLE_UHS_DEBUGGING 1
 
@@ -287,9 +305,13 @@ Preferences preferences;
 #include <spi4teensy3.h>
 #endif
 
+#ifdef USE_SABERTOOTH_PACKET_SERIAL
 #include <motor/SabertoothDriver.h>
+#endif
 
-#include "SoftwareSerial.h"
+#ifdef USE_CYTRON_PACKET_SERIAL
+#include <motor/CytronSmartDriveDuoDriver.h>
+#endif
 
 #include "pin-map.h"
 
@@ -330,11 +352,21 @@ int marcDuinoButtonCounter = 0;
 int speedToggleButtonCounter = 0;
 int domeToggleButtonCounter = 0;
 
-SabertoothDriver STImpl(SABERTOOTH_ADDR, SABERTOOTH_SERIAL);
-SabertoothDriver SyRImpl(SYREN_ADDR, SABERTOOTH_SERIAL);
+#ifdef USE_SABERTOOTH_PACKET_SERIAL
+SabertoothDriver FootMotorImpl(FOOT_MOTOR_ADDR, MOTOR_SERIAL);
+SabertoothDriver DomeMotorImpl(DOME_MOTOR_ADDR, MOTOR_SERIAL);
 
-SabertoothDriver *ST=&STImpl;
-SabertoothDriver *SyR=&SyRImpl;
+SabertoothDriver* FootMotor=&FootMotorImpl;
+SabertoothDriver* DomeMotor=&DomeMotorImpl;
+#endif
+
+#ifdef USE_CYTRON_PACKET_SERIAL
+CytronSmartDriveDuoMDDS30Driver FootMotorImpl(FOOT_MOTOR_ADDR, MOTOR_SERIAL);
+CytronSmartDriveDuoMDDS10Driver DomeMotorImpl(DOME_MOTOR_ADDR, MOTOR_SERIAL);
+
+CytronSmartDriveDuoDriver* FootMotor=&FootMotorImpl;
+CytronSmartDriveDuoDriver* DomeMotor=&DomeMotorImpl;
+#endif
 
 ///////Setup for USB and Bluetooth Devices////////////////////////////
 USB Usb;
@@ -616,6 +648,8 @@ void setup()
 {
     REELTWO_READY();
 
+    delay(1000);
+
 #ifdef USE_PREFERENCES
     if (!preferences.begin("penumbrashadow", false))
     {
@@ -629,21 +663,21 @@ void setup()
 #endif
     PrintReelTwoInfo(Serial, "Penumbra Shadow MD");
 
-    Serial.print(F("\r\nBluetooth Library Started"));
+    DEBUG_PRINTLN("Bluetooth Library Started");
 
     //Setup for PS3
     PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
     PS3NavDome->attachOnInit(onInitPS3NavDome); 
 
     //Setup for SABERTOOTH_SERIAL Motor Controllers - Sabertooth (Feet) 
-    SABERTOOTH_SERIAL_INIT(motorControllerBaudRate);
-    ST->autobaud();          // Send the autobaud command to the Sabertooth controller(s).
-    ST->setTimeout(10);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
-    ST->setDeadband(driveDeadBandRange);
-    ST->stop(); 
-    SyR->autobaud();
-    SyR->setTimeout(20);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
-    SyR->stop(); 
+    MOTOR_SERIAL_INIT(motorControllerBaudRate);
+    FootMotor->autobaud();          // Send the autobaud command to the Sabertooth controller(s).
+    FootMotor->setTimeout(10);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
+    FootMotor->setDeadband(driveDeadBandRange);
+    // FootMotor->stop();
+    // DomeMotor->autobaud();
+    DomeMotor->setTimeout(20);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
+    // DomeMotor->stop();
 
     // //Setup for MD_SERIAL MarcDuino Dome Control Board
     MD_SERIAL_INIT(marcDuinoBaudRate);
@@ -657,7 +691,7 @@ void setup()
 
     if (Usb.Init() == -1)
     {
-        Serial.print(F("\r\nOSC did not start"));
+        DEBUG_PRINTLN("OSC did not start");
         while (1); //halt
     }
 }
@@ -710,6 +744,7 @@ void loop()
     if (Serial.available())
     {
         int ch = Serial.read();
+        MD_SERIAL.print((char)ch);
         if (ch == 0x0A || ch == 0x0D)
         {
             const char* cmd = sBuffer;
@@ -734,6 +769,13 @@ void loop()
             sBuffer[sPos++] = ch;
             sBuffer[sPos] = '\0';
         }
+    }
+
+    // Clear inbound buffer of any data sent form the MarcDuino board
+    if (MD_SERIAL.available())
+    {
+        int ch = MD_SERIAL.read();
+        Serial.print((char)ch);
     }
 }
 
@@ -760,7 +802,7 @@ bool ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
 
             if (!isFootMotorStopped)
             {
-                ST->stop();
+                FootMotor->stop();
                 isFootMotorStopped = true;
                 footDriveSpeed = 0;
               
@@ -772,7 +814,7 @@ bool ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
         {
             if (!isFootMotorStopped)
             {
-                ST->stop();
+                FootMotor->stop();
                 isFootMotorStopped = true;
                 footDriveSpeed = 0;
 
@@ -785,7 +827,7 @@ bool ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
         {
             if (!isFootMotorStopped)
             {
-                ST->stop();
+                FootMotor->stop();
                 isFootMotorStopped = true;
                 footDriveSpeed = 0;
 
@@ -894,14 +936,14 @@ bool ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
                 if (footDriveSpeed != 0 || abs(turnnum) > 5)
                 {
                     SHADOW_VERBOSE("Motor: FootSpeed: %d\nTurnnum: %d\nTime of command: %lu\n", footDriveSpeed, turnnum, millis())              
-                    ST->turn(turnnum * invertTurnDirection);
-                    ST->drive(footDriveSpeed);
+                    FootMotor->turn(turnnum * invertTurnDirection);
+                    FootMotor->drive(footDriveSpeed);
                 }
                 else
                 {    
                     if (!isFootMotorStopped)
                     {
-                        ST->stop();
+                        FootMotor->stop();
                         isFootMotorStopped = true;
                         footDriveSpeed = 0;
                       
@@ -973,14 +1015,14 @@ void rotateDome(int domeRotationSpeed, String mesg)
         {
             isDomeMotorStopped = false;
             SHADOW_VERBOSE("Dome rotation speed: %d\n", domeRotationSpeed)        
-            SyR->motor(domeRotationSpeed);
+            DomeMotor->motor(domeRotationSpeed);
         }
         else
         {
             isDomeMotorStopped = true; 
             SHADOW_VERBOSE("\n***Dome motor is STOPPED***\n")
             
-            SyR->stop();
+            DomeMotor->stop();
         }
         previousDomeMillis = currentMillis;      
     }
@@ -1011,7 +1053,7 @@ void domeDrive()
     }
     else if (!isDomeMotorStopped)
     {
-        SyR->stop();
+        DomeMotor->stop();
         isDomeMotorStopped = true;
     }  
 }  
@@ -1028,7 +1070,7 @@ void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
         SHADOW_DEBUG("Disabling the DriveStick\n")
         SHADOW_DEBUG("Stopping Motors\n")
 
-        ST->stop();
+        FootMotor->stop();
         isFootMotorStopped = true;
         isStickEnabled = false;
         footDriveSpeed = 0;
@@ -1071,7 +1113,7 @@ void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
         domeAutomation = false;
         domeStatus = 0;
         domeTargetPosition = 0;
-        SyR->stop();
+        DomeMotor->stop();
         isDomeMotorStopped = true;
         
         SHADOW_DEBUG("Dome Automation OFF\n")
@@ -1110,10 +1152,6 @@ void marcDuinoFoot()
         return;    
     }
    
-    // Clear inbound buffer of any data sent from the MarcDuino board
-    while (MD_SERIAL.available())
-        MD_SERIAL.read();
-
     //------------------------------------ 
     // Send triggers for the base buttons 
     //------------------------------------
@@ -1316,10 +1354,6 @@ void marcDuinoDome()
     {
         return;    
     }
-   
-    // Clear inbound buffer of any data sent form the MarcDuino board
-    while (MD_SERIAL.available())
-        MD_SERIAL.read();
 
     //------------------------------------ 
     // Send triggers for the base buttons 
@@ -1592,14 +1626,14 @@ void autoDome()
         if (domeStopTurnTime > millis())
         {
             domeSpeed = domeAutoSpeed * domeTurnDirection;
-            SyR->motor(domeSpeed);
+            DomeMotor->motor(domeSpeed);
 
             SHADOW_DEBUG("Turning Now!!\n")
         }
         else  // turn completed - stop the motor
         {
             domeStatus = 0;
-            SyR->stop();
+            DomeMotor->stop();
 
             SHADOW_DEBUG("STOP TURN!!\n")
         }      
@@ -1642,8 +1676,8 @@ void onInitPS3NavFoot()
         // Prevent connection from anything but the MAIN controllers          
         SHADOW_DEBUG("\nWe have an invalid controller trying to connect as tha FOOT controller, it will be dropped.\n")
 
-        ST->stop();
-        SyR->stop();
+        FootMotor->stop();
+        DomeMotor->stop();
         isFootMotorStopped = true;
         footDriveSpeed = 0;
         PS3NavFoot->setLedOff(LED1);
@@ -1685,8 +1719,8 @@ void onInitPS3NavDome()
         // Prevent connection from anything but the DOME controllers          
         SHADOW_DEBUG("\nWe have an invalid controller trying to connect as the DOME controller, it will be dropped.\n")
 
-        ST->stop();
-        SyR->stop();
+        FootMotor->stop();
+        DomeMotor->stop();
         isFootMotorStopped = true;
         footDriveSpeed = 0;
         PS3NavDome->setLedOff(LED1);
@@ -1736,7 +1770,7 @@ bool criticalFaultDetect()
         {
             SHADOW_DEBUG("It has been 300ms since we heard from the PS3 Foot Controller\n")
             SHADOW_DEBUG("Shutting down motors, and watching for a new PS3 Foot message\n")
-            ST->stop();
+            FootMotor->stop();
             isFootMotorStopped = true;
             footDriveSpeed = 0;
         }
@@ -1746,7 +1780,7 @@ bool criticalFaultDetect()
             SHADOW_DEBUG("It has been 10s since we heard from the PS3 Foot Controller\nmsgLagTime:%u  lastMsgTime:%u  millis: %lu\n",
                           msgLagTime, lastMsgTime, millis())
             SHADOW_DEBUG("Disconnecting the Foot controller\n")
-            ST->stop();
+            FootMotor->stop();
             isFootMotorStopped = true;
             footDriveSpeed = 0;
             PS3NavFoot->disconnect();
@@ -1788,7 +1822,7 @@ bool criticalFaultDetect()
             SHADOW_DEBUG("Too much bad data coming from the PS3 FOOT Controller\n")
             SHADOW_DEBUG("Disconnecting the controller and stop motors.\n")
 
-            ST->stop();
+            FootMotor->stop();
             isFootMotorStopped = true;
             footDriveSpeed = 0;
             PS3NavFoot->disconnect();
@@ -1801,7 +1835,7 @@ bool criticalFaultDetect()
         SHADOW_DEBUG("No foot controller was found\n")
         SHADOW_DEBUG("Shuting down motors and watching for a new PS3 foot message\n")
 
-        ST->stop();
+        FootMotor->stop();
         isFootMotorStopped = true;
         footDriveSpeed = 0;
         WaitingforReconnect = true;
@@ -1844,7 +1878,7 @@ bool criticalFaultDetectDome()
                           msgLagTime, lastMsgTime, millis())
             SHADOW_DEBUG("Disconnecting the Foot controller\n")
             
-            SyR->stop();
+            DomeMotor->stop();
             PS3NavDome->disconnect();
             WaitingforReconnectDome = true;
             return true;
@@ -1877,7 +1911,7 @@ bool criticalFaultDetectDome()
             SHADOW_DEBUG("Too much bad data coming from the PS3 DOME Controller\n")
             SHADOW_DEBUG("Disconnecting the controller and stop motors.\n")
 
-            SyR->stop();
+            DomeMotor->stop();
             PS3NavDome->disconnect();
             WaitingforReconnectDome = true;
             return true;
@@ -1908,7 +1942,7 @@ bool readUSB()
         SHADOW_DEBUG("No foot controller was found\n")
         SHADOW_DEBUG("Shuting down motors, and watching for a new PS3 foot message\n")
 
-        ST->stop();
+        FootMotor->stop();
         isFootMotorStopped = true;
         footDriveSpeed = 0;
         WaitingforReconnect = true;
