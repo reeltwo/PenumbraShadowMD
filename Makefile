@@ -9,7 +9,7 @@ ESP32_FLASHSIZE=16MB
 GITHUB_REPOS= \
 reeltwo/Reeltwo \
 rimim/espsoftwareserial \
-felis/USB_Host_Shield_2.0
+reeltwo/USB_Host_Shield_2.0
 
 include ../Arduino.mk
 
