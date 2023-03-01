@@ -67,6 +67,9 @@
 #define USE_PREFERENCES
 #define USE_SABERTOOTH_PACKET_SERIAL
 //#define USE_CYTRON_PACKET_SERIAL
+//#define USE_MP3_TRIGGER
+//#define USE_DFMINI_PLAYER
+#define USE_HCR_VOCALIZER
 
 #define PS3_CONTROLLER_FOOT_MAC       "XX:XX:XX:XX:XX:XX"  //Set this to your FOOT PS3 controller MAC address
 #define PS3_CONTROLLER_DOME_MAC       "XX:XX:XX:XX:XX:XX"  //Set to a secondary DOME PS3 controller MAC address (Optional)
@@ -104,6 +107,19 @@ int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at do
 
 #define SHADOW_DEBUG(...) printf(__VA_ARGS__);
 #define SHADOW_VERBOSE(...) printf(__VA_ARGS__);
+
+#ifdef USE_PREFERENCES
+#include <Preferences.h>
+#define PREFERENCE_PS3_FOOT_MAC             "ps3footmac"
+#define PREFERENCE_PS3_DOME_MAC             "ps3domemac"
+#define PREFERENCE_MARCSOUND                "msound"
+#define PREFERENCE_MARCSOUND_VOLUME         "mvolume"
+#define PREFERENCE_MARCSOUND_STARTUP        "msoundstart"
+#define PREFERENCE_MARCSOUND_RANDOM         "mrandom"
+#define PREFERENCE_MARCSOUND_RANDOM_MIN     "mrandommin"
+#define PREFERENCE_MARCSOUND_RANDOM_MAX     "mrandommax"
+Preferences preferences;
+#endif
 
 // ---------------------------------------------------------------------------------------
 //                          MarcDuino Button Settings
@@ -214,9 +230,88 @@ int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at do
 // Marcduino Action Syntax:
 // #<1-76> Standard Marcduino Functions
 // MP3=<182->,LD=<1-8>,LDText="Hello World",Panel=M<1-8>,Panel<1-10>[delay=1,open=5]
+bool handleMarcduinoAction(const char* action);
+
+class MarcduinoButtonAction
+{
+public:
+    MarcduinoButtonAction(const char* name, const char* default_action) :
+        fNext(NULL),
+        fName(name),
+        fDefaultAction(default_action)
+    {
+        if (*head() == NULL)
+            *head() = this;
+        if (*tail() != NULL)
+            (*tail())->fNext = this;
+        *tail() = this;
+    }
+
+    static MarcduinoButtonAction* findAction(String name)
+    {
+        for (MarcduinoButtonAction* btn = *head(); btn != NULL; btn = btn->fNext)
+        {
+            if (name.equalsIgnoreCase(btn->name()))
+                return btn;
+        }
+        return nullptr;
+    }
+
+    static void listActions()
+    {
+        for (MarcduinoButtonAction* btn = *head(); btn != NULL; btn = btn->fNext)
+        {
+            printf("%s: %s\n", btn->name().c_str(), btn->action().c_str());
+        }
+    }
+
+    void reset()
+    {
+        preferences.remove(fName);
+    }
+
+    void setAction(String newAction)
+    {
+        preferences.putString(fName, newAction);
+    }
+
+    void trigger()
+    {
+        SHADOW_VERBOSE("TRIGGER: %s\n", fName);
+        handleMarcduinoAction(action().c_str());
+    }
+
+    String name()
+    {
+        return fName;
+    }
+
+    String action()
+    {
+        return preferences.getString(fName, fDefaultAction);
+    }
+
+private:
+    MarcduinoButtonAction* fNext;
+    const char* fName;
+    const char* fDefaultAction;
+
+    static MarcduinoButtonAction** head()
+    {
+        static MarcduinoButtonAction* sHead;
+        return &sHead;
+    }
+
+    static MarcduinoButtonAction** tail()
+    {
+        static MarcduinoButtonAction* sTail;
+        return &sTail;
+    }
+};
 
 #define MARCDUINO_ACTION(var,act) \
-const char* var = act;
+MarcduinoButtonAction var(#var,act);
+
 //----------------------------------------------------
 // CONFIGURE: The FOOT Navigation Controller Buttons
 //----------------------------------------------------
@@ -233,10 +328,10 @@ MARCDUINO_ACTION(btnUP_CIRCLE_MD, "#2")
 MARCDUINO_ACTION(btnLeft_CIRCLE_MD, "#4")
 MARCDUINO_ACTION(btnRight_CIRCLE_MD, "#7")
 MARCDUINO_ACTION(btnDown_CIRCLE_MD, "#10")
-MARCDUINO_ACTION(btnUP_PS_MD, "MP3=183,LD=5")
-MARCDUINO_ACTION(btnLeft_PS_MD, "MP3=186,LD=1")
-MARCDUINO_ACTION(btnRight_PS_MD, "MP3=185,LD=1")
-MARCDUINO_ACTION(btnDown_PS_MD, "MP3=184,LD=1")
+MARCDUINO_ACTION(btnUP_PS_MD, "$71,LD=5")
+MARCDUINO_ACTION(btnLeft_PS_MD, "$81,LD=1")
+MARCDUINO_ACTION(btnRight_PS_MD, "$83,LD=1")
+MARCDUINO_ACTION(btnDown_PS_MD, "$82,LD=1")
 MARCDUINO_ACTION(btnUP_L1_MD, "#8")
 MARCDUINO_ACTION(btnLeft_L1_MD, "#3")
 MARCDUINO_ACTION(btnRight_L1_MD, "#5")
@@ -293,12 +388,6 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 
 #include <PS3BT.h>
 #include <usbhub.h>
-#ifdef USE_PREFERENCES
-#include <Preferences.h>
-#define PREFERENCE_PS3_FOOT_MAC             "ps3footmac"
-#define PREFERENCE_PS3_DOME_MAC             "ps3domemac"
-Preferences preferences;
-#endif
 
 // Satisfy IDE, which only needs to see the include statment in the ino.
 #ifdef dobogusinclude
@@ -421,10 +510,6 @@ static const char* sMarcCommands[] = {
 #include "MarcduinoCommands.h"
 };
 
-static const char* sMarcMP3[] = {
-#include "MarcduinoMP3.h"
-};
-
 bool handleMarcduinoAction(const char* action)
 {
     String LD_text = "";
@@ -465,20 +550,43 @@ bool handleMarcduinoAction(const char* action)
     }
     for (;;)
     {
-        if (startswith(cmd, "MP3="))
+        char buf[100];
+        if (*cmd == '$')
         {
-            constexpr int lowerRange = 182;
-            constexpr int upperRange = lowerRange + SizeOfArray(sMarcMP3);
-            uint32_t num = strtolu(cmd, &cmd);
-            if (num >= lowerRange && num <= upperRange)
+            char* mp3Cmd = cmd;
+            char* nextCmd = strchr(cmd, ',');
+            if (nextCmd != nullptr)
             {
-                sendMarcCommand(sMarcMP3[num - lowerRange]);
+                size_t len = nextCmd - mp3Cmd;
+                strncpy(buf, mp3Cmd, len);
+                buf[len] = '\0';
+                cmd = nextCmd;
+                mp3Cmd = buf;
             }
             else
             {
-                SHADOW_DEBUG("MP3 number range is 181 - %d in action command \"%s\"\n", upperRange, action)
-                return false;
+                cmd += strlen(mp3Cmd);
             }
+            sendMarcCommand(mp3Cmd);
+        }
+        else if (startswith(cmd, "MP3="))
+        {
+            char* mp3Cmd = cmd;
+            char* nextCmd = strchr(cmd, ',');
+            if (nextCmd != nullptr)
+            {
+                size_t len = nextCmd - mp3Cmd;
+                buf[0] = '$';
+                strncpy(&buf[1], mp3Cmd, len);
+                buf[len+1] = '\0';
+                cmd = nextCmd;
+                mp3Cmd = buf;
+            }
+            else
+            {
+                cmd += strlen(mp3Cmd);
+            }
+            sendMarcCommand(mp3Cmd);
         }
         else if (startswith(cmd, "Panel=M"))
         {
@@ -640,6 +748,17 @@ bool handleMarcduinoAction(const char* action)
 //                          Main Program
 // =======================================================================================
 
+#if defined(USE_HCR_VOCALIZER) || defined(USE_MP3_TRIGGER) || defined(USE_DFMINI_PLAYER)
+#define SOUND_DEBUG(...) printf(__VA_ARGS__);
+#define MARC_SOUND_VOLUME               500     // 0 - 1000
+#define MARC_SOUND_RANDOM               true    // Play random sounds
+#define MARC_SOUND_RANDOM_MIN           1000    // Min wait until random sound
+#define MARC_SOUND_RANDOM_MAX           10000   // Max wait until random sound
+#define MARC_SOUND_STARTUP              255     // Startup sound
+#define MARC_SOUND_PLAYER               MarcSound::kHCR
+#include "MarcduinoSound.h"
+#define MARC_SOUND
+#endif
 
 // =======================================================================================
 //                          Initialize - Setup Function
@@ -689,17 +808,38 @@ void setup()
 
     SetupEvent::ready();
 
+#if defined(MARC_SOUND_PLAYER)
+    SOUND_SERIAL_INIT(SOUND_SERIAL_BAUD);
+    MarcSound::Module soundPlayer = (MarcSound::Module)preferences.getInt(PREFERENCE_MARCSOUND, MARC_SOUND_PLAYER);
+    int soundStartup = preferences.getInt(PREFERENCE_MARCSOUND_STARTUP, MARC_SOUND_STARTUP);
+    if (!sMarcSound.begin(soundPlayer, SOUND_SERIAL, soundStartup))
+    {
+        DEBUG_PRINTLN("FAILED TO INITALIZE SOUND MODULE");
+    }
+    sMarcSound.setVolume(preferences.getInt(PREFERENCE_MARCSOUND_VOLUME, MARC_SOUND_VOLUME) / 1000.0);
+#endif
+
     if (Usb.Init() == -1)
     {
         DEBUG_PRINTLN("OSC did not start");
         while (1); //halt
     }
+#if defined(MARC_SOUND_PLAYER)
+    sMarcSound.playStartSound();
+    sMarcSound.setRandomMin(preferences.getInt(PREFERENCE_MARCSOUND_RANDOM_MIN, MARC_SOUND_RANDOM_MIN));
+    sMarcSound.setRandomMax(preferences.getInt(PREFERENCE_MARCSOUND_RANDOM_MAX, MARC_SOUND_RANDOM_MAX));
+    if (preferences.getBool(PREFERENCE_MARCSOUND_RANDOM, MARC_SOUND_RANDOM))
+        sMarcSound.startRandomInSeconds(13);
+#endif
 }
 
 void sendMarcCommand(const char* cmd)
 {
     SHADOW_VERBOSE("Sending MARC: \"%s\"\n", cmd)
     MD_SERIAL.print(cmd); MD_SERIAL.print("\n");
+#if defined(MARC_SOUND_PLAYER)
+    sMarcSound.handleCommand(cmd);
+#endif
 }
 
 void sendBodyMarcCommand(const char* cmd)
@@ -734,12 +874,15 @@ void loop()
     marcDuinoFoot();
     toggleSettings();
     custMarcDuinoPanel();     
-    
+#if defined(MARC_SOUND_PLAYER)
+    sMarcSound.idle();
+#endif
+
     // If dome automation is enabled - Call function
     if (domeAutomation && time360DomeTurn > 1999 && time360DomeTurn < 8001 && domeAutoSpeed > 49 && domeAutoSpeed < 101)  
     {
        autoDome(); 
-    }   
+    }
 
     if (Serial.available())
     {
@@ -747,7 +890,7 @@ void loop()
         MD_SERIAL.print((char)ch);
         if (ch == 0x0A || ch == 0x0D)
         {
-            const char* cmd = sBuffer;
+            char* cmd = sBuffer;
             if (startswith(cmd, "#SMZERO"))
             {
                 preferences.clear();
@@ -758,9 +901,127 @@ void loop()
             {
                 reboot();
             }
+            else if (startswith(cmd, "#SMLIST"))
+            {
+                printf("Button Actions\n");
+                printf("-----------------------------------\n");
+                MarcduinoButtonAction::listActions();
+            }
+            else if (startswith(cmd, "#SMDEL"))
+            {
+                String key(cmd);
+                key.trim();
+                MarcduinoButtonAction* btn = MarcduinoButtonAction::findAction(key);
+                if (btn != nullptr)
+                {
+                    btn->reset();
+                    printf("Trigger: %s reset to default %s\n", btn->name().c_str(), btn->action().c_str());
+                }
+                else
+                {
+                    printf("Trigger Not Found: %s\n", key.c_str());
+                }
+            }
+            else if (startswith(cmd, "#SMVOLUME"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val > 1000)
+                {
+                    printf("Value out of range. 0 - 1000\n");
+                }
+                else
+                {
+                    preferences.putInt(PREFERENCE_MARCSOUND_VOLUME, val);
+                    printf("Sound Volume: %d\n", val);
+                    sMarcSound.setVolume(1000.0 / val);
+                }
+            }
+            else if (startswith(cmd, "#SMSOUND"))
+            {
+                bool invalid = false;
+                uint32_t val = strtolu(cmd, &cmd);
+                switch (val)
+                {
+                    case MarcSound::kDisabled:
+                        printf("Sound Disabled.\n");
+                        break;
+                    case MarcSound::kMP3Trigger:
+                        printf("MP3Trigger Enabled.\n");
+                        break;
+                    case MarcSound::kDFMini:
+                        printf("DFMiniPlayer Enabled.\n");
+                        break;
+                    case MarcSound::kHCR:
+                        printf("HCR Vocalizer Enabled.\n");
+                        break;
+                    default:
+                        invalid = true;
+                        printf("Unknown Sound Type: %d\n", val);
+                        break;
+                }
+                if (!invalid)
+                {
+                    preferences.putInt(PREFERENCE_MARCSOUND, val);
+                }
+            }
+            else if (startswith(cmd, "#SMSTARTUP"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                preferences.putInt(PREFERENCE_MARCSOUND_STARTUP, val);
+                printf("Startup Sound: %d\n", val);
+            }
+            else if (startswith(cmd, "#SMRANDMIN"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                preferences.putInt(PREFERENCE_MARCSOUND_RANDOM_MIN, val);
+                printf("Random Min: %d\n", val);
+                sMarcSound.setRandomMin(val);
+            }
+            else if (startswith(cmd, "#SMRANDMAX"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                preferences.putInt(PREFERENCE_MARCSOUND_RANDOM_MAX, val);
+                printf("Random Max: %d\n", val);
+                sMarcSound.setRandomMax(val);
+            }
+            else if (startswith(cmd, "#SMRAND0"))
+            {
+                preferences.putInt(PREFERENCE_MARCSOUND_RANDOM, false);
+                printf("Random Disabled.\n");
+                sMarcSound.stopRandom();
+            }
+            else if (startswith(cmd, "#SMRAND1"))
+            {
+                preferences.putBool(PREFERENCE_MARCSOUND_RANDOM, true);
+                printf("Random Enabled.\n");
+                sMarcSound.startRandom();
+            }
+            else if (startswith(cmd, "#SMSET"))
+            {
+                char* keyp = cmd;
+                char* valp = strchr(cmd, ':');
+                if (valp != nullptr)
+                {
+                    *valp++ = '\0';
+                    String key(keyp);
+                    key.trim();
+                    MarcduinoButtonAction* btn = MarcduinoButtonAction::findAction(key);
+                    if (btn != nullptr)
+                    {
+                        String action(valp);
+                        action.trim();
+                        btn->setAction(action);
+                        printf("Trigger: %s set to %s\n", key.c_str(), action.c_str());
+                    }
+                    else
+                    {
+                        printf("Trigger Not Found: %s\n", key.c_str());
+                    }
+                }
+            }
             else
             {
-                printf("Unknown\n");
+                printf("Unknown: %s\n", sBuffer);
             }
             sPos = 0;
         }
@@ -1163,8 +1424,7 @@ void marcDuinoFoot()
         }
         else
         {
-            handleMarcduinoAction(btnUP_MD);
-            SHADOW_VERBOSE("FOOT: btnUP\n")
+            btnUP_MD.trigger();
             return;
         }
     }
@@ -1177,8 +1437,7 @@ void marcDuinoFoot()
         }
         else
         {     
-            handleMarcduinoAction(btnDown_MD);
-            SHADOW_VERBOSE("FOOT: btnDown\n");
+            btnDown_MD.trigger();
             return;
         }
     }
@@ -1191,8 +1450,7 @@ void marcDuinoFoot()
         }
         else
         {           
-            handleMarcduinoAction(btnLeft_MD);
-            SHADOW_VERBOSE("FOOT: btnLeft\n")
+            btnLeft_MD.trigger();
             return;
         }
     }
@@ -1205,8 +1463,7 @@ void marcDuinoFoot()
         }
         else
         {     
-            handleMarcduinoAction(btnRight_MD);
-            SHADOW_VERBOSE("FOOT: btnRight\n")
+            btnRight_MD.trigger();;
             return;
         }
     }
@@ -1216,29 +1473,25 @@ void marcDuinoFoot()
     //------------------------------------
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP) && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP) && PS3NavDome->getButtonPress(CROSS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnUP_CROSS_MD);
-        SHADOW_VERBOSE("FOOT: btnUP_CROSS\n")
+        btnUP_CROSS_MD.trigger();
         return;        
     }
     
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN) && PS3NavDome->getButtonPress(CROSS))) && marcDuinoButtonCounter == 1)
     {      
-        handleMarcduinoAction(btnDown_CROSS_MD);
-        SHADOW_VERBOSE("FOOT: btnDown_CROSS\n")
+        btnDown_CROSS_MD.trigger();
         return;
     }
     
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT) && PS3NavDome->getButtonPress(CROSS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnLeft_CROSS_MD);
-        SHADOW_VERBOSE("FOOT: btnLeft_CROSS\n")
+        btnLeft_CROSS_MD.trigger();;
         return;
     }
 
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(CROSS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnRight_CROSS_MD);
-        SHADOW_VERBOSE("FOOT: btnRight_CROSS\n")
+        btnRight_CROSS_MD.trigger();
         return;
     }
 
@@ -1247,29 +1500,25 @@ void marcDuinoFoot()
     //------------------------------------
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP) && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP) && PS3NavDome->getButtonPress(CIRCLE))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnUP_CIRCLE_MD);
-        SHADOW_VERBOSE("FOOT: btnUP_CIRCLE\n")
+        btnUP_CIRCLE_MD.trigger();
         return;
     }
     
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN) && PS3NavDome->getButtonPress(CIRCLE))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnDown_CIRCLE_MD);
-        SHADOW_VERBOSE("FOOT: btnDown_CIRCLE\n")
+        btnDown_CIRCLE_MD.trigger();
         return;
     }
     
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT) && PS3NavDome->getButtonPress(CIRCLE))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnLeft_CIRCLE_MD);
-        SHADOW_VERBOSE("FOOT: btnLeft_CIRCLE\n")
+        btnLeft_CIRCLE_MD.trigger();
         return;
     }
 
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(CIRCLE))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnRight_CIRCLE_MD);
-        SHADOW_VERBOSE("FOOT: btnRight_CIRCLE\n")
+        btnRight_CIRCLE_MD.trigger();
         return;
     }
     
@@ -1278,29 +1527,25 @@ void marcDuinoFoot()
     //------------------------------------
     if (PS3NavFoot->getButtonPress(UP) && PS3NavFoot->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnUP_L1_MD);
-        SHADOW_VERBOSE("FOOT: btnUP_L1\n")
+        btnUP_L1_MD.trigger();
         return;
     }
     
     if (PS3NavFoot->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnDown_L1_MD);
-        SHADOW_VERBOSE("FOOT: btnDown_L1\n")
+        btnDown_L1_MD.trigger();
         return;
     }
     
     if (PS3NavFoot->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnLeft_L1_MD);
-        SHADOW_VERBOSE("FOOT: btnLeft_L1\n")
+        btnLeft_L1_MD.trigger();
         return;
     }
 
     if (PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnRight_L1_MD);
-        SHADOW_VERBOSE("FOOT: btnRight_L1\n")
+        btnRight_L1_MD.trigger();
         return;
     }
     
@@ -1309,29 +1554,25 @@ void marcDuinoFoot()
     //------------------------------------
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP) && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP) && PS3NavDome->getButtonPress(PS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnUP_PS_MD);
-        SHADOW_VERBOSE("FOOT: btnUP_PS\n")
+        btnUP_PS_MD.trigger();
         return;
     }
     
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN) && PS3NavDome->getButtonPress(PS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnDown_PS_MD);
-        SHADOW_VERBOSE("FOOT: btnDown_PS\n")
+        btnDown_PS_MD.trigger();
         return;
     }
     
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT) && PS3NavDome->getButtonPress(PS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnLeft_PS_MD);
-        SHADOW_VERBOSE("FOOT: btnLeft_PS\n")
+        btnLeft_PS_MD.trigger();
         return;
     }
 
     if (((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(PS))) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(btnRight_PS_MD);
-        SHADOW_VERBOSE("FOOT: btnRight_PS\n")
+        btnRight_PS_MD.trigger();
         return;
     }
 }
@@ -1360,29 +1601,25 @@ void marcDuinoDome()
     //------------------------------------
     if (PS3NavDome->getButtonPress(UP) && !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) && !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnUP_MD);
-        SHADOW_VERBOSE("DOME: btnUP\n")
+        FTbtnUP_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(DOWN) && !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) && !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnDown_MD);
-        SHADOW_VERBOSE("DOME: btnDown\n")
+        FTbtnDown_MD.trigger();
         return;      
     }
     
     if (PS3NavDome->getButtonPress(LEFT) && !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) && !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnLeft_MD);
-        SHADOW_VERBOSE("DOME: btnLeft\n")
+        FTbtnLeft_MD.trigger();
         return;
     }
 
     if (PS3NavDome->getButtonPress(RIGHT) && !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) && !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnRight_MD);
-        SHADOW_VERBOSE("DOME: btnRight\n")
+        FTbtnRight_MD.trigger();
         return;
     }
     
@@ -1391,29 +1628,25 @@ void marcDuinoDome()
     //------------------------------------
     if (PS3NavDome->getButtonPress(UP) && PS3NavFoot->getButtonPress(CROSS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnUP_CROSS_MD);
-        SHADOW_VERBOSE("DOME: btnUP_CROSS\n")
+        FTbtnUP_CROSS_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(CROSS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnDown_CROSS_MD);
-        SHADOW_VERBOSE("DOME: btnDown_CROSS\n")
+        FTbtnDown_CROSS_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(CROSS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnLeft_CROSS_MD);
-        SHADOW_VERBOSE("DOME: btnLeft_CROSS\n")
+        FTbtnLeft_CROSS_MD.trigger();
         return;
     }
 
     if (PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CROSS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnRight_CROSS_MD);
-        SHADOW_VERBOSE("DOME: btnRight_CROSS\n")
+        FTbtnRight_CROSS_MD.trigger();
         return;
     }
 
@@ -1422,29 +1655,25 @@ void marcDuinoDome()
     //------------------------------------
     if (PS3NavDome->getButtonPress(UP) && PS3NavFoot->getButtonPress(CIRCLE) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnUP_CIRCLE_MD);
-        SHADOW_VERBOSE("DOME: btnUP_CIRCLE\n")
+        FTbtnUP_CIRCLE_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(CIRCLE) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnDown_CIRCLE_MD);
-        SHADOW_VERBOSE("DOME: btnDown_CIRCLE\n")
+        FTbtnDown_CIRCLE_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(CIRCLE) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnLeft_CIRCLE_MD);
-        SHADOW_VERBOSE("DOME: btnLeft_CIRCLE\n")
+        FTbtnLeft_CIRCLE_MD.trigger();
         return;
     }
 
     if (PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CIRCLE) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnRight_CIRCLE_MD);
-        SHADOW_VERBOSE("DOME: btnRight_CIRCLE\n")
+        FTbtnRight_CIRCLE_MD.trigger();
         return;
     }
     
@@ -1453,29 +1682,25 @@ void marcDuinoDome()
     //------------------------------------
     if (PS3NavDome->getButtonPress(UP) && PS3NavDome->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnUP_L1_MD);
-        SHADOW_VERBOSE("DOME: btnUP_L1\n")
+        FTbtnUP_L1_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(DOWN) && PS3NavDome->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnDown_L1_MD);
-        SHADOW_VERBOSE("DOME: btnDown_L1\n")
+        FTbtnDown_L1_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(LEFT) && PS3NavDome->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnLeft_L1_MD);
-        SHADOW_VERBOSE("DOME: btnLeft_L1\n")
+        FTbtnLeft_L1_MD.trigger();
         return;
     }
 
     if (PS3NavDome->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(L1) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnRight_L1_MD);
-        SHADOW_VERBOSE("DOME: btnRight_L1\n")
+        FTbtnRight_L1_MD.trigger();
         return;
     }
     
@@ -1484,29 +1709,25 @@ void marcDuinoDome()
     //------------------------------------
     if (PS3NavDome->getButtonPress(UP) && PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnUP_PS_MD);
-        SHADOW_VERBOSE("DOME: btnUP_PS\n")
+        FTbtnUP_PS_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnDown_PS_MD);
-        SHADOW_VERBOSE("DOME: btnDown_PS\n")
+        FTbtnDown_PS_MD.trigger();
         return;
     }
     
     if (PS3NavDome->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnLeft_PS_MD);
-        SHADOW_VERBOSE("DOME: btnLeft_PS\n")
+        FTbtnLeft_PS_MD.trigger();
         return;
     }
 
     if (PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(PS) && marcDuinoButtonCounter == 1)
     {
-        handleMarcduinoAction(FTbtnRight_PS_MD);
-        SHADOW_VERBOSE("DOME: btnRight_PS\n")
+        FTbtnRight_PS_MD.trigger();
         return;
     }
 }
