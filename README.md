@@ -10,6 +10,10 @@ This is a modified Shadow sketch to work with the Penumbra controller.
 <li>https://github.com/reeltwo/USB_Host_Shield_2.0</li>
 </ul>
 
+## Web Installer
+
+A web-based installer for the latest firmware can be found here: https://reeltwo.github.io/Penumbra-Installer/
+
 ## Build using Arduino IDE
 
 The firmware should build with esp32 board package 1.0.6 or 2.0.5. For ESP32S2 support 2.0.5 is required.
