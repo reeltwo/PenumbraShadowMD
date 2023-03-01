@@ -9,7 +9,8 @@ ESP32_FLASHSIZE=16MB
 GITHUB_REPOS= \
 reeltwo/Reeltwo \
 rimim/espsoftwareserial \
-reeltwo/USB_Host_Shield_2.0
+reeltwo/USB_Host_Shield_2.0 \
+DFRobot/DFRobotDFPlayerMini
 
 include ../Arduino.mk
 

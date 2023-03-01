@@ -6,6 +6,8 @@
 ._*
 .build
 .lib
+.pio
+.vscode
 *build_version.h
 requirements.txt
 .DS_Store

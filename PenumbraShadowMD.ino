@@ -231,6 +231,8 @@ Preferences preferences;
 // #<1-76> Standard Marcduino Functions
 // MP3=<182->,LD=<1-8>,LDText="Hello World",Panel=M<1-8>,Panel<1-10>[delay=1,open=5]
 bool handleMarcduinoAction(const char* action);
+void sendMarcCommand(const char* cmd);
+void sendBodyMarcCommand(const char* cmd);
 
 class MarcduinoButtonAction
 {
@@ -506,7 +508,7 @@ int footDriveSpeed = 0;
 
 // =======================================================================================
 
-static const char* sMarcCommands[] = {
+static const char* DEFAULT_MARCDUINO_COMMANDS[] = {
 #include "MarcduinoCommands.h"
 };
 
@@ -524,10 +526,10 @@ bool handleMarcduinoAction(const char* action)
         uint32_t seq = strtolu(cmd+1, &cmd);
         if (*cmd == '\0')
         {
-            if (seq >= 1 && seq <= SizeOfArray(sMarcCommands))
+            if (seq >= 1 && seq <= SizeOfArray(DEFAULT_MARCDUINO_COMMANDS))
             {
                 // If the commands starts with "BM" we direct it to the body marc controller
-                const char* marcCommand = sMarcCommands[seq-1];
+                const char* marcCommand = DEFAULT_MARCDUINO_COMMANDS[seq-1];
                 if (marcCommand[0] == 'B' && marcCommand[1] == 'M')
                 {
                     sendBodyMarcCommand(&marcCommand[2]);
@@ -541,7 +543,7 @@ bool handleMarcduinoAction(const char* action)
             }
             else
             {
-                SHADOW_DEBUG("Marcduino sequence range is 1-%d in action command \"%s\"\n", SizeOfArray(sMarcCommands), action)
+                SHADOW_DEBUG("Marcduino sequence range is 1-%d in action command \"%s\"\n", SizeOfArray(DEFAULT_MARCDUINO_COMMANDS), action)
                 return false;
             }
         }
