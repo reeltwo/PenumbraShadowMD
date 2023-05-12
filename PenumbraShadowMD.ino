@@ -839,8 +839,8 @@ void setup()
 
 void sendMarcCommand(const char* cmd)
 {
-    SHADOW_VERBOSE("Sending MARC: \"%s\"\n", cmd)
-    MD_SERIAL.print(cmd); MD_SERIAL.print("\n");
+    SHADOW_VERBOSE("Sending MARC: \"%s\"\r", cmd)
+    MD_SERIAL.print(cmd); MD_SERIAL.print("\r");
 #if defined(MARC_SOUND_PLAYER)
     sMarcSound.handleCommand(cmd);
 #endif
@@ -848,8 +848,8 @@ void sendMarcCommand(const char* cmd)
 
 void sendBodyMarcCommand(const char* cmd)
 {
-    SHADOW_VERBOSE("Sending BODYMARC: \"%s\"\n", cmd)
-    BODY_MD_SERIAL.print(cmd); BODY_MD_SERIAL.print("\n");
+    SHADOW_VERBOSE("Sending BODYMARC: \"%s\"\r", cmd)
+    BODY_MD_SERIAL.print(cmd); BODY_MD_SERIAL.print("\r");
 }
 
 ////////////////////////////////

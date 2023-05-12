@@ -12,8 +12,8 @@
 
 #define RXD1_PIN                33
 #define TXD1_PIN                25
-#define RXD2_PIN                16
-#define TXD2_PIN                17
+#define RXD2_PIN                17
+#define TXD2_PIN                16
 #define RXD3_PIN                32
 #define TXD3_PIN                4
 
