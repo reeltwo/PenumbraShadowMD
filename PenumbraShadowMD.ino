@@ -102,10 +102,10 @@ int invertTurnDirection = -1;   //This may need to be set to 1 for some configur
 byte domeAutoSpeed = 70;     // Speed used when dome automation is active - Valid Values: 50 - 100
 int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
 
-// #define SHADOW_DEBUG       //uncomment this for console DEBUG output
-//#define SHADOW_VERBOSE     //uncomment this for console VERBOSE output
+#define SHADOW_DEBUG(...)       //uncomment this for console DEBUG output
+//#define SHADOW_VERBOSE(...)   //uncomment this for console VERBOSE output
 
-#define SHADOW_DEBUG(...) printf(__VA_ARGS__);
+// #define SHADOW_DEBUG(...) printf(__VA_ARGS__);
 #define SHADOW_VERBOSE(...) printf(__VA_ARGS__);
 
 #ifdef USE_PREFERENCES
@@ -516,7 +516,6 @@ bool handleMarcduinoAction(const char* action)
 {
     String LD_text = "";
     bool panelTypeSelected = false;
-    bool customRoutine = false;
     char buffer[1024];
     snprintf(buffer, sizeof(buffer), "%s", action);
     char* cmd = buffer;
@@ -624,7 +623,7 @@ bool handleMarcduinoAction(const char* action)
             uint32_t num = strtolu(cmd, &cmd);
             if (num >= 1 && num <= SizeOfArray(sPanelStatus))
             {
-                PanelStatus panel;
+                PanelStatus &panel = sPanelStatus[num-1];
                 panel.fStatus = 1;
                 if (*cmd == '[')
                 {
@@ -661,6 +660,8 @@ bool handleMarcduinoAction(const char* action)
                         }
                     }
                     while (*cmd != '\0' && *cmd != ']');
+                    if (*cmd == ']')
+                        cmd++;
                 }
                 if (panel.fStatus)
                 {
@@ -739,8 +740,9 @@ bool handleMarcduinoAction(const char* action)
     {
         SHADOW_DEBUG("Ignoring unknown trailing \"%s\" in action \"%s\"\n", cmd, action);
     }
-    if (customRoutine)
+    if (panelTypeSelected)
     {
+        printf("panelTypeSelected\n");
         sRunningCustRoutine = true;
     }
     return true;
