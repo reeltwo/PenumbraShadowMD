@@ -102,6 +102,10 @@ int invertTurnDirection = -1;   //This may need to be set to 1 for some configur
 byte domeAutoSpeed = 70;     // Speed used when dome automation is active - Valid Values: 50 - 100
 int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
 
+// Songs are 1 - 21, but start at 0 (will be incremented on first use)
+int CurrentSong = 0;
+int SongCount = 21;
+
 #define SHADOW_DEBUG(...)       //uncomment this for console DEBUG output
 //#define SHADOW_VERBOSE(...)   //uncomment this for console VERBOSE output
 
@@ -205,7 +209,16 @@ Preferences preferences;
 //    76 = Magic Panel ON
 //    77 = Magic Panel OFF
 //    78 = Magic Panel Flicker (10 seconds) 
-//
+//   *** CUSTOM MARCDUINO COMMANDS ***
+//    79 = Wiggle Dome
+//    80 = Wiggle Body
+//    81 = Wave Bye
+//    82 = Utility Arms Open and then Close
+//    83 = Open all Body Doors, raise arms, operate tools, lower arms close all doors
+//    84 = Use Gripper
+//    85 = Use Interface Tool
+//    86 = Ping Pong Body Doors
+
 // Std MarcDuino Logic Display Functions (For custom functions)
 //     1 = Display normal random sequence
 //     2 = Short circuit (10 second display sequence)
@@ -230,6 +243,7 @@ Preferences preferences;
 // Marcduino Action Syntax:
 // #<1-76> Standard Marcduino Functions
 // MP3=<182->,LD=<1-8>,LDText="Hello World",Panel=M<1-8>,Panel<1-10>[delay=1,open=5]
+// NEXT_SONG,PREV_SONG
 bool handleMarcduinoAction(const char* action);
 void sendMarcCommand(const char* cmd);
 void sendBodyMarcCommand(const char* cmd);
@@ -318,50 +332,51 @@ MarcduinoButtonAction var(#var,act);
 // CONFIGURE: The FOOT Navigation Controller Buttons
 //----------------------------------------------------
 
-MARCDUINO_ACTION(btnUP_MD, "#12")
-MARCDUINO_ACTION(btnLeft_MD, "#13")
-MARCDUINO_ACTION(btnRight_MD, "#14")
-MARCDUINO_ACTION(btnDown_MD, "#11")
-MARCDUINO_ACTION(btnUP_CROSS_MD, "#26")
-MARCDUINO_ACTION(btnLeft_CROSS_MD, "#23")
-MARCDUINO_ACTION(btnRight_CROSS_MD, "#24")
-MARCDUINO_ACTION(btnDown_CROSS_MD, "#27")
-MARCDUINO_ACTION(btnUP_CIRCLE_MD, "#2")
-MARCDUINO_ACTION(btnLeft_CIRCLE_MD, "#4")
-MARCDUINO_ACTION(btnRight_CIRCLE_MD, "#7")
-MARCDUINO_ACTION(btnDown_CIRCLE_MD, "#10")
-MARCDUINO_ACTION(btnUP_PS_MD, "$71,LD=5")
-MARCDUINO_ACTION(btnLeft_PS_MD, "$81,LD=1")
-MARCDUINO_ACTION(btnRight_PS_MD, "$83,LD=1")
-MARCDUINO_ACTION(btnDown_PS_MD, "$82,LD=1")
-MARCDUINO_ACTION(btnUP_L1_MD, "#8")
-MARCDUINO_ACTION(btnLeft_L1_MD, "#3")
-MARCDUINO_ACTION(btnRight_L1_MD, "#5")
-MARCDUINO_ACTION(btnDown_L1_MD, "#9")
+MARCDUINO_ACTION(btnUP_MD, "#26")                // Arrow Up (Volume up)
+MARCDUINO_ACTION(btnLeft_MD, "PREV_SONG")        // Arrow Left (Previous Song)
+MARCDUINO_ACTION(btnRight_MD, "NEXT_SONG")       // Arrow Right (Next Song)
+MARCDUINO_ACTION(btnDown_MD, "#27")              // Arrow Down (Volume Dowm)
+MARCDUINO_ACTION(btnUP_CROSS_MD, "#14")          // Arrow Up + CROSS (Full Awake)
+MARCDUINO_ACTION(btnLeft_CROSS_MD, "#11")        // Arrow Down + CROSS (Quiet)
+MARCDUINO_ACTION(btnRight_CROSS_MD, "")
+MARCDUINO_ACTION(btnDown_CROSS_MD, "")
+MARCDUINO_ACTION(btnUP_CIRCLE_MD, "")
+MARCDUINO_ACTION(btnLeft_CIRCLE_MD, "")
+MARCDUINO_ACTION(btnRight_CIRCLE_MD, "")
+MARCDUINO_ACTION(btnDown_CIRCLE_MD, "")
+MARCDUINO_ACTION(btnUP_PS_MD, "")
+MARCDUINO_ACTION(btnLeft_PS_MD, "")
+MARCDUINO_ACTION(btnRight_PS_MD, "")
+MARCDUINO_ACTION(btnDown_PS_MD, "")
+MARCDUINO_ACTION(btnUP_L1_MD, "")
+MARCDUINO_ACTION(btnLeft_L1_MD, "")
+MARCDUINO_ACTION(btnRight_L1_MD, "")
+MARCDUINO_ACTION(btnDown_L1_MD, "")
 
 //----------------------------------------------------
 // CONFIGURE: The DOME Navigation Controller Buttons
 //----------------------------------------------------
-MARCDUINO_ACTION(FTbtnUP_MD, "#58")             // Arrow Up
-MARCDUINO_ACTION(FTbtnLeft_MD, "#56")           // Arrow Left
-MARCDUINO_ACTION(FTbtnRight_MD, "#57")          // Arrow Right
-MARCDUINO_ACTION(FTbtnDown_MD, "#59")           // Arrow Down
-MARCDUINO_ACTION(FTbtnUP_CROSS_MD, "#28")       // Arrow UP + CROSS
-MARCDUINO_ACTION(FTbtnLeft_CROSS_MD, "#33")     // Arrow Left + CROSS
-MARCDUINO_ACTION(FTbtnRight_CROSS_MD, "#30")    // Arrow Right + CROSS
-MARCDUINO_ACTION(FTbtnDown_CROSS_MD, "#29")     // Arrow Down + CROSS
-MARCDUINO_ACTION(FTbtnUP_CIRCLE_MD, "#22")      // Arrow Up + CIRCLE
-MARCDUINO_ACTION(FTbtnLeft_CIRCLE_MD, "#23")    // Arrow Left + CIRCLE
-MARCDUINO_ACTION(FTbtnRight_CIRCLE_MD, "#24")   // Arrow Right + CIRCLE
-MARCDUINO_ACTION(FTbtnDown_CIRCLE_MD, "#25")    // Arrow Down + CIRCLE
-MARCDUINO_ACTION(FTbtnUP_PS_MD, "#38")          // Arrow UP + PS
-MARCDUINO_ACTION(FTbtnLeft_PS_MD, "#40")        // Arrow Left + PS
-MARCDUINO_ACTION(FTbtnRight_PS_MD, "#41")       // Arrow Right + PS
-MARCDUINO_ACTION(FTbtnDown_PS_MD, "#39")        // Arrow Down + PS
-MARCDUINO_ACTION(FTbtnUP_L1_MD, "#34")          // Arrow UP + L1
-MARCDUINO_ACTION(FTbtnLeft_L1_MD, "#36")        // Arrow Left + L1
-MARCDUINO_ACTION(FTbtnRight_L1_MD, "#37")       // Arrow Right + L1
-MARCDUINO_ACTION(FTbtnDown_L1_MD, "#35")        // Arrow Down + L1
+
+MARCDUINO_ACTION(FTbtnUP_MD, "#79,#80")         // Arrow Up (Wiggle Dome and Body)
+MARCDUINO_ACTION(FTbtnDown_MD, "#81")           // Arrow Down (Wave Bye)
+MARCDUINO_ACTION(FTbtnLeft_MD, "#82")           // Arrow Left (Utility Arms Open and then Close)
+MARCDUINO_ACTION(FTbtnRight_MD, "#83")          // Arrow Right (Open all Body Doors, raise arms, operate tools, lower arms close all doors)
+MARCDUINO_ACTION(FTbtnUP_CROSS_MD, "#84")       // Arrow Up + CROSS (Use Gripper)
+MARCDUINO_ACTION(FTbtnLeft_CROSS_MD, "#85")     // Arrow Left + CROSS (Use Interface Tool)
+MARCDUINO_ACTION(FTbtnRight_CROSS_MD, "#86")    // Arrow Right + CROSS (Ping Pong Body Doors)
+MARCDUINO_ACTION(FTbtnDown_CROSS_MD, "")        // Arrow Down + CROSS
+MARCDUINO_ACTION(FTbtnUP_CIRCLE_MD, "")         // Arrow Up + CIRCLE
+MARCDUINO_ACTION(FTbtnLeft_CIRCLE_MD, "")       // Arrow Left + CIRCLE
+MARCDUINO_ACTION(FTbtnRight_CIRCLE_MD, "")      // Arrow Right + CIRCLE
+MARCDUINO_ACTION(FTbtnDown_CIRCLE_MD, "")       // Arrow Down + CIRCLE
+MARCDUINO_ACTION(FTbtnUP_PS_MD, "#81")          // Arrow Up + PS
+MARCDUINO_ACTION(FTbtnLeft_PS_MD, "")           // Arrow Left + PS
+MARCDUINO_ACTION(FTbtnRight_PS_MD, "")          // Arrow Right + PS
+MARCDUINO_ACTION(FTbtnDown_PS_MD, "")           // Arrow Down + PS
+MARCDUINO_ACTION(FTbtnUP_L1_MD, "")             // Arrow Up + L1
+MARCDUINO_ACTION(FTbtnLeft_L1_MD, "")           // Arrow Left + L1
+MARCDUINO_ACTION(FTbtnRight_L1_MD, "")          // Arrow Right + L1
+MARCDUINO_ACTION(FTbtnDown_L1_MD, "")           // Arrow Down + L1
 
 // ---------------------------------------------------------------------------------------
 //               SYSTEM VARIABLES - USER CONFIG SECTION COMPLETED
@@ -519,12 +534,29 @@ bool handleMarcduinoAction(const char* action)
     char buffer[1024];
     snprintf(buffer, sizeof(buffer), "%s", action);
     char* cmd = buffer;
-    if (*cmd == '#')
+    for (;;)
     {
-        // Std Marcduino Function Call Configured
-        uint32_t seq = strtolu(cmd+1, &cmd);
-        if (*cmd == '\0')
+        char buf[100];
+        if (*cmd == '#')
         {
+            char* numCmd = cmd;
+            char* nextCmd = strchr(cmd, ',');
+            if (nextCmd != nullptr)
+            {
+                size_t len = nextCmd - numCmd;
+                strncpy(buf, numCmd, len);
+                buf[len] = '\0';
+                cmd = nextCmd;
+                numCmd = buf;
+            }
+            else
+            {
+                cmd += strlen(numCmd);
+            }
+
+            // Std Marcduino Function Call Configured
+            uint32_t seq = strtolu(numCmd+1, &numCmd);
+                      
             if (seq >= 1 && seq <= SizeOfArray(DEFAULT_MARCDUINO_COMMANDS))
             {
                 // If the commands starts with "BM" we direct it to the body marc controller
@@ -538,21 +570,13 @@ bool handleMarcduinoAction(const char* action)
                     // Otherwise we send it to the dome Marcduino
                     sendMarcCommand(marcCommand);
                 }
-                return true;
             }
             else
             {
                 SHADOW_DEBUG("Marcduino sequence range is 1-%d in action command \"%s\"\n", SizeOfArray(DEFAULT_MARCDUINO_COMMANDS), action)
-                return false;
             }
         }
-        SHADOW_DEBUG("Excepting number after # in action command \"%s\"\n", action)
-        return false;
-    }
-    for (;;)
-    {
-        char buf[100];
-        if (*cmd == '$')
+        else if (*cmd == '$')
         {
             char* mp3Cmd = cmd;
             char* nextCmd = strchr(cmd, ',');
@@ -731,6 +755,26 @@ bool handleMarcduinoAction(const char* action)
                 SHADOW_DEBUG("LD range is 1 - 8 in action command \"%s\"\n", action)
                 return false;
             }
+        }
+        else if (startswith(cmd, "NEXT_SONG"))
+        {
+          CurrentSong = CurrentSong + 1;
+          
+          if (CurrentSong > SongCount) {   
+              CurrentSong = 1; // Go back to the start
+          }
+          
+          sendMarcCommand("$8" + CurrentSong);
+        }
+        else if (startswith(cmd, "PREV_SONG"))
+        {
+          CurrentSong = CurrentSong - 1;
+        
+          if (CurrentSong < 1) {   
+            CurrentSong = SongCount; // Go to last song
+          }
+          
+          sendMarcCommand("$8" + CurrentSong);
         }
         if (*cmd != ',')
             break;
@@ -1754,7 +1798,7 @@ void custMarcDuinoPanel()
             {
                 char cmd[10];
                 snprintf(cmd, sizeof(cmd), ":OP%02d", i+1);
-                sendMarcCommand(cmd);
+                sendBodyMarcCommand(cmd);
                 panel.fStatus = 2;
             }
         }
@@ -1764,7 +1808,7 @@ void custMarcDuinoPanel()
             {
                 char cmd[10];
                 snprintf(cmd, sizeof(cmd), ":CL%02d", i+1);
-                sendMarcCommand(cmd);
+                sendBodyMarcCommand(cmd);
                 panel.fStatus = 0;
             }
         }
