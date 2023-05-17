@@ -103,8 +103,16 @@ byte domeAutoSpeed = 70;     // Speed used when dome automation is active - Vali
 int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
 
 // Songs are 1 - 21, but start at 0 (will be incremented on first use)
-int CurrentSong = 0;
-int SongCount = 21;
+int currentSong = 0;
+int songCount = 20;
+
+bool holosOn = false;
+bool dbCbiOpen = false;
+
+const int MAX_PD_CLEAR_CMD_SIZE = 30;
+int pdCurrentIndex = 0;
+unsigned long pdClearTimes[MAX_PD_CLEAR_CMD_SIZE];
+String pdClearCmds[MAX_PD_CLEAR_CMD_SIZE];
 
 #define SHADOW_DEBUG(...)       //uncomment this for console DEBUG output
 //#define SHADOW_VERBOSE(...)   //uncomment this for console VERBOSE output
@@ -218,6 +226,15 @@ Preferences preferences;
 //    84 = Use Gripper
 //    85 = Use Interface Tool
 //    86 = Ping Pong Body Doors
+//    87 = Scream (No panels)
+//    88 = Holo Lights Pulse Red
+//    89 = Logics Vertical Scan Line
+//    90 = PSIs Vertical Scan Line
+//    91 = MP Cylon
+//    92 = Knight Rider Sequence (Dome)
+//    93 = Knight Rider Sequence (Body)
+//    94 = PSIs Normal
+//    95 = Random Sounds
 
 // Std MarcDuino Logic Display Functions (For custom functions)
 //     1 = Display normal random sequence
@@ -329,54 +346,72 @@ private:
 MarcduinoButtonAction var(#var,act);
 
 //----------------------------------------------------
+// Control System
+//----------------------------------------------------
+
+// PS + CROSS     (Disable Drive)
+// PS + CIRCLE    (Enable Drive)
+// L3 + L1        (Toggle Overspeed)
+// L2 + CROSS     (Disable Dome Automation)
+// L2 + CIRCLE    (Enable Dome Automation)
+
+//----------------------------------------------------
 // CONFIGURE: The FOOT Navigation Controller Buttons
 //----------------------------------------------------
 
-MARCDUINO_ACTION(btnUP_MD, "#26")                // Arrow Up (Volume up)
-MARCDUINO_ACTION(btnLeft_MD, "PREV_SONG")        // Arrow Left (Previous Song)
-MARCDUINO_ACTION(btnRight_MD, "NEXT_SONG")       // Arrow Right (Next Song)
-MARCDUINO_ACTION(btnDown_MD, "#27")              // Arrow Down (Volume Dowm)
-MARCDUINO_ACTION(btnUP_CROSS_MD, "#14")          // Arrow Up + CROSS (Full Awake)
-MARCDUINO_ACTION(btnLeft_CROSS_MD, "#11")        // Arrow Down + CROSS (Quiet)
+MARCDUINO_ACTION(btnUP_MD, "#22,#23")                     // Arrow Up             (Holos Twitch/On)
+MARCDUINO_ACTION(btnDown_MD, "#11")                       // Arrow Down           (Quiet)
+MARCDUINO_ACTION(btnLeft_MD, "#13")                       // Arrow Left           (Mid Awake)
+MARCDUINO_ACTION(btnRight_MD, "TOGGLE_HOLO_LIGHTS")       // Arrow Right          (Holo Lights On/Off)
+
+MARCDUINO_ACTION(btnUP_CIRCLE_MD, "#26")                  // Arrow Up + CROSS     (Volume Up)
+MARCDUINO_ACTION(btnDown_CIRCLE_MD, "#27")                // Arrow Down + CROSS   (Volume Down)
+MARCDUINO_ACTION(btnLeft_CIRCLE_MD, "PREV_SONG")          // Arrow Left + CROSS   (Previous Song)
+MARCDUINO_ACTION(btnRight_CIRCLE_MD, "NEXT_SONG")         // Arrow Right + CROSS  (Next Song)
+
+MARCDUINO_ACTION(btnUP_CROSS_MD, "")      
+MARCDUINO_ACTION(btnDown_CROSS_MD, "RESET")               // Arrow Up + CIRCLE    (Reset - Everything Off/Closed)
+MARCDUINO_ACTION(btnLeft_CROSS_MD, "")
 MARCDUINO_ACTION(btnRight_CROSS_MD, "")
-MARCDUINO_ACTION(btnDown_CROSS_MD, "")
-MARCDUINO_ACTION(btnUP_CIRCLE_MD, "")
-MARCDUINO_ACTION(btnLeft_CIRCLE_MD, "")
-MARCDUINO_ACTION(btnRight_CIRCLE_MD, "")
-MARCDUINO_ACTION(btnDown_CIRCLE_MD, "")
+
 MARCDUINO_ACTION(btnUP_PS_MD, "")
+MARCDUINO_ACTION(btnDown_PS_MD, "")
 MARCDUINO_ACTION(btnLeft_PS_MD, "")
 MARCDUINO_ACTION(btnRight_PS_MD, "")
-MARCDUINO_ACTION(btnDown_PS_MD, "")
+
 MARCDUINO_ACTION(btnUP_L1_MD, "")
+MARCDUINO_ACTION(btnDown_L1_MD, "")
 MARCDUINO_ACTION(btnLeft_L1_MD, "")
 MARCDUINO_ACTION(btnRight_L1_MD, "")
-MARCDUINO_ACTION(btnDown_L1_MD, "")
 
 //----------------------------------------------------
 // CONFIGURE: The DOME Navigation Controller Buttons
 //----------------------------------------------------
 
-MARCDUINO_ACTION(FTbtnUP_MD, "#79,#80")         // Arrow Up (Wiggle Dome and Body)
-MARCDUINO_ACTION(FTbtnDown_MD, "#81")           // Arrow Down (Wave Bye)
-MARCDUINO_ACTION(FTbtnLeft_MD, "#82")           // Arrow Left (Utility Arms Open and then Close)
-MARCDUINO_ACTION(FTbtnRight_MD, "#83")          // Arrow Right (Open all Body Doors, raise arms, operate tools, lower arms close all doors)
-MARCDUINO_ACTION(FTbtnUP_CROSS_MD, "#84")       // Arrow Up + CROSS (Use Gripper)
-MARCDUINO_ACTION(FTbtnLeft_CROSS_MD, "#85")     // Arrow Left + CROSS (Use Interface Tool)
-MARCDUINO_ACTION(FTbtnRight_CROSS_MD, "#86")    // Arrow Right + CROSS (Ping Pong Body Doors)
-MARCDUINO_ACTION(FTbtnDown_CROSS_MD, "")        // Arrow Down + CROSS
-MARCDUINO_ACTION(FTbtnUP_CIRCLE_MD, "")         // Arrow Up + CIRCLE
-MARCDUINO_ACTION(FTbtnLeft_CIRCLE_MD, "")       // Arrow Left + CIRCLE
-MARCDUINO_ACTION(FTbtnRight_CIRCLE_MD, "")      // Arrow Right + CIRCLE
-MARCDUINO_ACTION(FTbtnDown_CIRCLE_MD, "")       // Arrow Down + CIRCLE
-MARCDUINO_ACTION(FTbtnUP_PS_MD, "#81")          // Arrow Up + PS
-MARCDUINO_ACTION(FTbtnLeft_PS_MD, "")           // Arrow Left + PS
-MARCDUINO_ACTION(FTbtnRight_PS_MD, "")          // Arrow Right + PS
-MARCDUINO_ACTION(FTbtnDown_PS_MD, "")           // Arrow Down + PS
-MARCDUINO_ACTION(FTbtnUP_L1_MD, "")             // Arrow Up + L1
-MARCDUINO_ACTION(FTbtnLeft_L1_MD, "")           // Arrow Left + L1
-MARCDUINO_ACTION(FTbtnRight_L1_MD, "")          // Arrow Right + L1
-MARCDUINO_ACTION(FTbtnDown_L1_MD, "")           // Arrow Down + L1
+MARCDUINO_ACTION(FTbtnUP_MD, "#87,#79,#80,#78")           // Arrow Up             (Scream, Wiggle Dome and Body)
+MARCDUINO_ACTION(FTbtnDown_MD, "#81,MP3=42")              // Arrow Down           (Wave Bye, Sad Sound)
+MARCDUINO_ACTION(FTbtnLeft_MD, "#8")                      // Arrow Left           (Disco)
+MARCDUINO_ACTION(FTbtnRight_MD, "#10")                    // Arrow Right          (Cantina)
+
+MARCDUINO_ACTION(FTbtnUP_CIRCLE_MD, "#9")                 // Arrow Up + CIRCLE    (Leia)
+MARCDUINO_ACTION(FTbtnDown_CIRCLE_MD, "KNIGHT_RIDER")     // Arrow Down + CIRCLE  (Knight Rider)
+MARCDUINO_ACTION(FTbtnLeft_CIRCLE_MD, "#7")               // Arrow Left + CIRCLE  (Smirk)
+MARCDUINO_ACTION(FTbtnRight_CIRCLE_MD, "#19")             // Arrow Right + CIRCLE (Marching Ants)
+
+MARCDUINO_ACTION(FTbtnUP_CROSS_MD, "#82")                 // Arrow Up + CROSS     (Utility Arms Open/Close)
+MARCDUINO_ACTION(FTbtnDown_CROSS_MD, "TOGGLE_DP_CBI")     // Arrow Down + CROSS   (Data Port and Charge Bay Open/Close)
+MARCDUINO_ACTION(FTbtnLeft_CROSS_MD, "#85")               // Arrow Left + CROSS   (Use Interface Arm)
+MARCDUINO_ACTION(FTbtnRight_CROSS_MD, "#84")              // Arrow Right + CROSS  (Use Gripper Arm)
+
+MARCDUINO_ACTION(FTbtnUP_PS_MD, "")                       // Arrow Up + PS
+MARCDUINO_ACTION(FTbtnDown_PS_MD, "KITT")                 // Arrow Down + PS      (KITT)
+MARCDUINO_ACTION(FTbtnLeft_PS_MD, "")                     // Arrow Left + PS
+MARCDUINO_ACTION(FTbtnRight_PS_MD, "")                    // Arrow Right + PS
+
+MARCDUINO_ACTION(FTbtnUP_L1_MD, "")                       // Arrow Up + L1
+MARCDUINO_ACTION(FTbtnDown_L1_MD, "")                     // Arrow Down + L1
+MARCDUINO_ACTION(FTbtnLeft_L1_MD, "")                     // Arrow Left + L1
+MARCDUINO_ACTION(FTbtnRight_L1_MD, "")                    // Arrow Right + L1
 
 // ---------------------------------------------------------------------------------------
 //               SYSTEM VARIABLES - USER CONFIG SECTION COMPLETED
@@ -390,6 +425,8 @@ int motorControllerBaudRate = 9600; // Set the baud rate for the Syren motor con
                                     // for packetized options are: 2400, 9600, 19200 and 38400
 
 int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controller
+
+int pdBaudRate = 9600; // Set the baud rate for the Printed Droid DPL
 
 #define FOOT_MOTOR_ADDR      128      // Serial Address for Foot Motor
 #define DOME_MOTOR_ADDR      129      // Serial Address for Dome Motor
@@ -526,6 +563,12 @@ int footDriveSpeed = 0;
 static const char* DEFAULT_MARCDUINO_COMMANDS[] = {
 #include "MarcduinoCommands.h"
 };
+
+char* makeCurrentSongCommand(){
+  static char songCmd[12];
+  snprintf(songCmd, sizeof(songCmd), "$8%d", currentSong);
+  return songCmd;
+}
 
 bool handleMarcduinoAction(const char* action)
 {
@@ -758,23 +801,49 @@ bool handleMarcduinoAction(const char* action)
         }
         else if (startswith(cmd, "NEXT_SONG"))
         {
-          CurrentSong = CurrentSong + 1;
+          currentSong = currentSong + 1;
           
-          if (CurrentSong > SongCount) {   
-              CurrentSong = 1; // Go back to the start
+          if (currentSong > songCount) {   
+              currentSong = 1; // Go back to the start
           }
-          
-          sendMarcCommand("$8" + CurrentSong);
+
+          sendMarcCommand(makeCurrentSongCommand());
         }
         else if (startswith(cmd, "PREV_SONG"))
         {
-          CurrentSong = CurrentSong - 1;
+          currentSong = currentSong - 1;
         
-          if (CurrentSong < 1) {   
-            CurrentSong = SongCount; // Go to last song
+          if (currentSong < 1) {   
+            currentSong = songCount; // Go to last song
           }
-          
-          sendMarcCommand("$8" + CurrentSong);
+
+          sendMarcCommand(makeCurrentSongCommand());
+        }
+        else if (startswith(cmd, "RESET"))
+        {
+          handleMarcduinoAction("#1,#55,#24,LD=1,#77,#94,#95"); // Close Panels, Holos Reset, Logics Reset, MP Off, Front PSI Normal, PSIs Normal, MP3 Random Sounds
+          sendPrintedDroidCommand("DP0\nCS0", "", 0); // DPL Off, CSL Off
+        }
+        else if (startswith(cmd, "TOGGLE_HOLO_LIGHTS"))
+        {
+           handleMarcduinoAction(holosOn ? "#24" : "#23");
+           holosOn = !holosOn;
+        }
+        else if (startswith(cmd, "TOGGLE_DP_CBI")) {
+           handleMarcduinoAction(dbCbiOpen ? "#57,#75" : "#56,#74");
+           dbCbiOpen = !dbCbiOpen;
+        }
+        else if (startswith(cmd, "KNIGHT_RIDER")) {
+          // knight rider effects on LDPL and CSL for 30s
+          sendPrintedDroidCommand("DP1\nCS2", "DP0\nCS0", 30000);        
+          // knight rider music, holo/logics/psi vertical scan line sequence/MP cylon/dome seq/body seq
+          handleMarcduinoAction("#88,#89,#90,#91,#92,#93");
+        }
+        else if (startswith(cmd, "KITT")) {
+          // knight rider effects on LDPL and CSL for 17s
+          sendPrintedDroidCommand("DP1\nCS2", "DP0\nCS0", 17000);        
+          // kitt music, holo/logics/psi vertical scan line sequence
+          handleMarcduinoAction("MP3=822,#88,#89,#90,#91");
         }
         if (*cmd != ',')
             break;
@@ -852,6 +921,9 @@ void setup()
     //Setup for BODY_MD_SERIAL Optional MarcDuino Control Board for Body Panels
     BODY_MD_SERIAL_INIT(marcDuinoBaudRate);
 
+    // Setup for printed droid serial
+    PD_SERIAL_INIT(pdBaudRate);
+
     // randomSeed(analogRead(0));  // random number seed for dome automation   
 
     SetupEvent::ready();
@@ -896,6 +968,36 @@ void sendBodyMarcCommand(const char* cmd)
     BODY_MD_SERIAL.print(cmd); BODY_MD_SERIAL.print("\r");
 }
 
+void sendPrintedDroidCommand(String cmd, String clearCmd, unsigned long duration)
+{
+    SHADOW_VERBOSE("Sending PD: \"%s\"\n", cmd.c_str())
+    PD_SERIAL.print(cmd.c_str()); PD_SERIAL.print('\n');
+
+    if (clearCmd.length() > 0) {
+      int idx = pdCurrentIndex % MAX_PD_CLEAR_CMD_SIZE;
+      
+      pdClearTimes[idx] = millis() + duration;
+      pdClearCmds[idx] = clearCmd;
+      pdCurrentIndex++;
+    }
+}
+
+void processPdClearCommands() {
+  for (int i = 0; i < MAX_PD_CLEAR_CMD_SIZE; i++) {
+      unsigned long timeToClear = pdClearTimes[i];
+      String clearCmd = pdClearCmds[i];
+
+      if (timeToClear != 0 && millis() >= timeToClear) {
+        SHADOW_VERBOSE("Sending PD Clear Cmd: \"%s\"\n", clearCmd.c_str())
+        PD_SERIAL.print(clearCmd.c_str()); PD_SERIAL.print('\n');
+
+        // clear
+        pdClearTimes[i] = 0;
+        pdClearCmds[i] = "";
+      }
+  }
+}
+
 ////////////////////////////////
 // This function is called when settings have been changed and needs a reboot
 void reboot()
@@ -915,7 +1017,7 @@ void loop()
     //LOOP through functions from highest to lowest priority.
     if (!readUSB())
         return;
-    
+
     footMotorDrive();
     domeDrive();
     marcDuinoDome();
@@ -925,6 +1027,8 @@ void loop()
 #if defined(MARC_SOUND_PLAYER)
     sMarcSound.idle();
 #endif
+
+    processPdClearCommands();
 
     // If dome automation is enabled - Call function
     if (domeAutomation && time360DomeTurn > 1999 && time360DomeTurn < 8001 && domeAutoSpeed > 49 && domeAutoSpeed < 101)  
@@ -1372,7 +1476,7 @@ void domeDrive()
 // =======================================================================================
 
 void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
-{
+{  
     // enable / disable drive stick
     if (myPS3->getButtonPress(PS) && myPS3->getButtonClick(CROSS))
     {
@@ -1511,7 +1615,7 @@ void marcDuinoFoot()
         }
         else
         {     
-            btnRight_MD.trigger();;
+            btnRight_MD.trigger();
             return;
         }
     }
