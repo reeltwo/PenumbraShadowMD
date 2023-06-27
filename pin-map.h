@@ -12,6 +12,7 @@
 
 #define RXD1_PIN                33
 #define TXD1_PIN                25
+// ERRATA: Pin 17 is not connected. Serial2 can either be RX or TX but not both.
 #define RXD2_PIN                17
 #define TXD2_PIN                16
 #define RXD3_PIN                32
