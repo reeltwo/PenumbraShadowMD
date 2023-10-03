@@ -771,8 +771,6 @@ void setup()
 {
     REELTWO_READY();
 
-    delay(1000);
-
 #ifdef USE_PREFERENCES
     if (!preferences.begin("penumbrashadow", false))
     {
@@ -790,15 +788,17 @@ void setup()
 
     //Setup for PS3
     PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
-    PS3NavDome->attachOnInit(onInitPS3NavDome); 
+    PS3NavDome->attachOnInit(onInitPS3NavDome);
 
     //Setup for SABERTOOTH_SERIAL Motor Controllers - Sabertooth (Feet) 
     MOTOR_SERIAL_INIT(motorControllerBaudRate);
-    FootMotor->autobaud();          // Send the autobaud command to the Sabertooth controller(s).
+    // Don't use autobaud(). It is flaky and causes delays. Default baud rate is 9600
+    // If your syren is set to something else call setBaudRate(9600) below or change it
+    // using Describe.
+    // FootMotor->setBaudRate(9600);   // Send the autobaud command to the Sabertooth controller(s).
     FootMotor->setTimeout(10);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
     FootMotor->setDeadband(driveDeadBandRange);
-    // FootMotor->stop();
-    // DomeMotor->autobaud();
+    FootMotor->stop();
     DomeMotor->setTimeout(20);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
     // DomeMotor->stop();
 
@@ -867,7 +867,7 @@ void reboot()
 // =======================================================================================
 
 void loop()
-{   
+{
     //LOOP through functions from highest to lowest priority.
     if (!readUSB())
         return;

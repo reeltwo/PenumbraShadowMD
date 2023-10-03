@@ -206,7 +206,7 @@ public:
                         sendHCR("<SS0>");
                         break;
                     case kChatSounds:
-                        sendHCR("<MT><MT>");
+                        sendHCR("<MM>");
                         break;
                     case kHappySounds:
                         if (filenum < fMaxSounds[bank] / 2)
@@ -221,7 +221,7 @@ public:
                             sendHCR("<SS1>");
                         break;
                     case kWhistleSounds:
-                        sendHCR("<MT><MT>");
+                        sendHCR("<MM>");
                         break;
                     case kScreamSounds:
                         switch (sound)
@@ -254,7 +254,7 @@ public:
     {
         if (fModule == kHCR)
         {
-            sendHCR("<MT><MT>");
+            sendHCR("<MM>");
             return;
         }
         uint8_t num;
@@ -328,7 +328,8 @@ public:
 
     void stopRandom()
     {
-        fRandomEnabled = true;
+        fRandomEnabledSaved = false;
+        fRandomEnabled = false;
     }
 
     void suspendRandom()
@@ -432,6 +433,8 @@ public:
                 break;
             case kHCR:
                 fStream = &stream;
+                sendHCR("<M0>");
+                sendHCR("<M0>");
                 break;
         }
         for (uint8_t i=0; i < SizeOfArray(fBankIndexes); i++)
