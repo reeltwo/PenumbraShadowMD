@@ -112,3 +112,65 @@ Set the sound output module to of the following:
 ```
 #SMSOUND 3
 ````
+### #SMCONFIG
+Display the current drive configuration
+```
+#SMCONFIG
+```
+### #SMNORMALSPEED[0..127]
+Set the normal drive speed: set this to whatever speeds works for you. 0-stop, 127-full speed. Default is 70.
+```
+#SMNORMALSPEED70
+```
+### #SMMAXSPEED[0..127]
+Set the over throttle drive speed: set this to whatever speeds works for you. 0-stop, 127-full speed. Default is 100.
+```
+#SMMAXSPEED100
+```
+### #SMTURNSPEED[0..127]
+Set the drive turn speed. The higher this number the faster it will spin in place, lower - the easier to control.
+Recommend beginner: 40 to 50, experienced: 50+, I like 75. Default is 50.
+```
+#SMTURNSPEED50
+```
+### #SMDOMESPEED[0..127]
+Set the dome drive top speed. Default is 100.
+```
+#SMDOMESPEED100
+```
+### #SMRAMPING[0..10]
+Set drive speed ramping. The lower this number the longer it will take to speedup or slow down. Default is 1.
+```
+#SMRAMPING1
+```
+### #SMFOOTDB[0..127]
+Set the foot controller joystick deadband. Use the lowest number with no drift. Default is 15
+```
+#SMFOOTDB15
+```
+### #SMDOMEDB[0..127]
+Set the dome controller joystick deadband. Use the lowest number with no drift. Default is 10
+```
+#SMDOMEDB15
+```
+### #SMDRIVEDB[0..127]
+Set the drive motor controller deadband. Use the lowest number with no drift. Default is 10
+```
+#SMDRIVEDB10
+```
+### #SMINVERT[0..1]
+Set the turn direction inversion. Default is 0.
+```
+#SMINVERT0
+```
+### #SMAUTOSPEED[50..100]
+Set the dome speed used when dome automation is active. Default is 70.
+```
+#SMAUTOSPEED70
+```
+### #SMAUTOTIME[2500..8000]
+Set the number of milliseconds for dome to complete 360 turn at #SMAUTOSPEED. Default is 2500.
+```
+#SMAUTOTIME2500
+```
+

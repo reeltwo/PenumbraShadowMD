@@ -71,6 +71,40 @@
 //#define USE_DFMINI_PLAYER
 #define USE_HCR_VOCALIZER
 
+//For Speed Setting (Normal): set this to whatever speeds works for you. 0-stop, 127-full speed.
+#define DEFAULT_DRIVE_SPEED_NORMAL          70
+//For Speed Setting (Over Throttle): set this for when needing extra power. 0-stop, 127-full speed.
+#define DEFAULT_DRIVE_SPEED_OVER_THROTTLE   100
+
+// the higher this number the faster it will spin in place, lower - the easier to control.
+// Recommend beginner: 40 to 50, experienced: 50+, I like 75
+#define DEFAULT_TURN_SPEED                  50
+                         
+// If using a speed controller for the dome, sets the top speed. Use a number up to 127
+#define DEFAULT_DOME_SPEED                  100
+                         
+// Ramping- the lower this number the longer R2 will take to speedup or slow down,
+// change this by increments of 1
+#define DEFAULT_RAMPING                     1
+                 
+// For controllers that centering problems, use the lowest number with no drift
+#define DEFAULT_JOYSTICK_FOOT_DEADBAND      15
+
+// For controllers that centering problems, use the lowest number with no drift
+#define DEFAULT_JOYSTICK_DOME_DEADBAND      10
+
+// Used to set the Sabertooth DeadZone for foot motors
+#define DEFAULT_DRIVE_DEADBAND              10
+
+//This may need to be set to true for some configurations
+#define DEFAULT_INVERT_TURN_DIRECTION       false
+
+// Speed used when dome automation is active - Valid Values: 50 - 100
+#define DEFAULT_AUTO_DOME_SPEED             70
+
+// milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
+#define DEFAULT_AUTO_DOME_TURN_TIME         2500
+
 #define PS3_CONTROLLER_FOOT_MAC       "XX:XX:XX:XX:XX:XX"  //Set this to your FOOT PS3 controller MAC address
 #define PS3_CONTROLLER_DOME_MAC       "XX:XX:XX:XX:XX:XX"  //Set to a secondary DOME PS3 controller MAC address (Optional)
 
@@ -80,27 +114,21 @@ String PS3ControllerDomeMAC = PS3_CONTROLLER_DOME_MAC;
 String PS3ControllerBackupFootMac = "XX";  //Set to the MAC Address of your BACKUP FOOT controller (Optional)
 String PS3ControllerBackupDomeMAC = "XX";  //Set to the MAC Address of your BACKUP DOME controller (Optional)
 
-byte drivespeed1 = 70;   //For Speed Setting (Normal): set this to whatever speeds works for you. 0-stop, 127-full speed.
-byte drivespeed2 = 110;  //For Speed Setting (Over Throttle): set this for when needing extra power. 0-stop, 127-full speed.
+byte drivespeed1 = DEFAULT_DRIVE_SPEED_NORMAL;
+byte drivespeed2 = DEFAULT_DRIVE_SPEED_OVER_THROTTLE;
+byte turnspeed = DEFAULT_TURN_SPEED;
+byte domespeed = DEFAULT_DOME_SPEED;
+byte ramping = DEFAULT_RAMPING;
 
-byte turnspeed = 50;      // the higher this number the faster it will spin in place, lower - the easier to control.
-                         // Recommend beginner: 40 to 50, experienced: 50+, I like 75
+byte joystickFootDeadZoneRange = DEFAULT_JOYSTICK_FOOT_DEADBAND;
+byte joystickDomeDeadZoneRange = DEFAULT_JOYSTICK_DOME_DEADBAND;
 
-byte domespeed = 100;    // If using a speed controller for the dome, sets the top speed
-                         // Use a number up to 127
+byte driveDeadBandRange = DEFAULT_DRIVE_DEADBAND;
 
-byte ramping = 1;        // Ramping- the lower this number the longer R2 will take to speedup or slow down,
-                         // change this by increments of 1
+bool invertTurnDirection = DEFAULT_INVERT_TURN_DIRECTION;
 
-byte joystickFootDeadZoneRange = 15;  // For controllers that centering problems, use the lowest number with no drift
-byte joystickDomeDeadZoneRange = 10;  // For controllers that centering problems, use the lowest number with no drift
-
-byte driveDeadBandRange = 10;     // Used to set the Sabertooth DeadZone for foot motors
-
-int invertTurnDirection = -1;   //This may need to be set to 1 for some configurations
-
-byte domeAutoSpeed = 70;     // Speed used when dome automation is active - Valid Values: 50 - 100
-int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
+byte domeAutoSpeed = DEFAULT_AUTO_DOME_SPEED;
+int time360DomeTurn = DEFAULT_AUTO_DOME_TURN_TIME;
 
 #define SHADOW_DEBUG(...)       //uncomment this for console DEBUG output
 //#define SHADOW_VERBOSE(...)   //uncomment this for console VERBOSE output
@@ -118,6 +146,17 @@ int time360DomeTurn = 2500;  // milliseconds for dome to complete 360 turn at do
 #define PREFERENCE_MARCSOUND_RANDOM         "mrandom"
 #define PREFERENCE_MARCSOUND_RANDOM_MIN     "mrandommin"
 #define PREFERENCE_MARCSOUND_RANDOM_MAX     "mrandommax"
+#define PREFERENCE_SPEED_NORMAL             "smspeednorm"
+#define PREFERENCE_SPEED_OVER_THROTTLE      "smspeedmax"
+#define PREFERENCE_TURN_SPEED               "smspeedturn"
+#define PREFERENCE_DOME_SPEED               "smspeeddome"
+#define PREFERENCE_RAMPING                  "smramping"
+#define PREFERENCE_FOOTSTICK_DEADBAND       "smfootdband"
+#define PREFERENCE_DOMESTICK_DEADBAND       "smdomedband"
+#define PREFERENCE_DRIVE_DEADBAND           "smdrivedband"
+#define PREFERENCE_INVERT_TURN_DIRECTION    "sminvertturn"
+#define PREFERENCE_DOME_AUTO_SPEED          "smdomeautospeed"
+#define PREFERENCE_DOME_DOME_TURN_TIME      "smdometurntime"
 Preferences preferences;
 #endif
 
@@ -780,6 +819,18 @@ void setup()
     {
         PS3ControllerFootMac = preferences.getString(PREFERENCE_PS3_FOOT_MAC, PS3_CONTROLLER_FOOT_MAC);
         PS3ControllerDomeMAC = preferences.getString(PREFERENCE_PS3_DOME_MAC, PS3_CONTROLLER_DOME_MAC);
+
+        drivespeed1 = preferences.getInt(PREFERENCE_SPEED_NORMAL, DEFAULT_DRIVE_SPEED_NORMAL);
+        drivespeed2 = preferences.getInt(PREFERENCE_SPEED_OVER_THROTTLE, DEFAULT_DRIVE_SPEED_OVER_THROTTLE);
+        turnspeed = preferences.getInt(PREFERENCE_TURN_SPEED, DEFAULT_TURN_SPEED);
+        domespeed = preferences.getInt(PREFERENCE_DOME_SPEED, DEFAULT_DOME_SPEED);
+        ramping = preferences.getInt(PREFERENCE_RAMPING, DEFAULT_RAMPING);
+        joystickFootDeadZoneRange = preferences.getInt(PREFERENCE_FOOTSTICK_DEADBAND, DEFAULT_JOYSTICK_FOOT_DEADBAND);
+        joystickDomeDeadZoneRange = preferences.getInt(PREFERENCE_DOMESTICK_DEADBAND, DEFAULT_JOYSTICK_DOME_DEADBAND);
+        driveDeadBandRange = preferences.getInt(PREFERENCE_DRIVE_DEADBAND, DEFAULT_DRIVE_DEADBAND);
+        invertTurnDirection = preferences.getBool(PREFERENCE_INVERT_TURN_DIRECTION, DEFAULT_INVERT_TURN_DIRECTION);
+        domeAutoSpeed = preferences.getInt(PREFERENCE_DOME_AUTO_SPEED, DEFAULT_AUTO_DOME_SPEED);
+        time360DomeTurn = preferences.getInt(PREFERENCE_DOME_DOME_TURN_TIME, DEFAULT_AUTO_DOME_TURN_TIME);
     }
 #endif
     PrintReelTwoInfo(Serial, "Penumbra Shadow MD");
@@ -968,6 +1019,20 @@ void loop()
                     preferences.putInt(PREFERENCE_MARCSOUND, val);
                 }
             }
+            else if (startswith(cmd, "#SMCONFIG"))
+            {
+                printf("Drive Speed Normal:  %3d (#SMNORMALSPEED) [0..127]\n", drivespeed1);
+                printf("Drive Speed Max:     %3d (#SMMAXSPEED)    [0..127]\n", drivespeed2);
+                printf("Turn Speed:          %3d (#SMTURNSPEED)   [0..127]\n", turnspeed);
+                printf("Dome Speed:          %3d (#SMDOMESPEED)   [0..127]\n", domespeed);
+                printf("Ramping:             %3d (#SMRAMPING)     [0..10]\n", ramping);
+                printf("Foot Stick Deadband: %3d (#SMFOOTDB)      [0..127]\n", joystickFootDeadZoneRange);
+                printf("Dome Stick Deadband: %3d (#SMDOMEDB)      [0..127]\n", joystickDomeDeadZoneRange);
+                printf("Drive Deadband:      %3d (#SMDRIVEDB)     [0..127]\n", driveDeadBandRange);
+                printf("Invert Turn:         %3d (#SMINVERT)      [0..1]\n", invertTurnDirection);
+                printf("Dome Auto Speed:     %3d (#SMAUTOSPEED)   [50..100]\n", domeAutoSpeed);
+                printf("Dome Auto Time:     %4d (#SMAUTOTIME)    [2000..8000]\n", time360DomeTurn);
+            }
             else if (startswith(cmd, "#SMSTARTUP"))
             {
                 uint32_t val = strtolu(cmd, &cmd);
@@ -999,6 +1064,203 @@ void loop()
                 preferences.putBool(PREFERENCE_MARCSOUND_RANDOM, true);
                 printf("Random Enabled.\n");
                 sMarcSound.startRandom();
+            }
+            else if (startswith(cmd, "#SMNORMALSPEED"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == drivespeed1)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    drivespeed1 = val;
+                    preferences.putInt(PREFERENCE_SPEED_NORMAL, drivespeed1);
+                    printf("Normal Speed Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMMAXSPEED"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == drivespeed2)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    drivespeed2 = val;
+                    preferences.putInt(PREFERENCE_SPEED_OVER_THROTTLE, drivespeed2);
+                    printf("Max Speed Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMTURNSPEED"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == turnspeed)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    turnspeed = val;
+                    preferences.putInt(PREFERENCE_TURN_SPEED, turnspeed);
+                    printf("Turn Speed Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMDOMESPEED"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == domespeed)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    domespeed = val;
+                    preferences.putInt(PREFERENCE_DOME_SPEED, val);
+                    printf("Dome Speed Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMRAMPING"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == ramping)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 10)
+                {
+                    ramping = val;
+                    preferences.putInt(PREFERENCE_RAMPING, ramping);
+                    printf("Ramping Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-10\n");
+                }
+            }
+            else if (startswith(cmd, "#SMFOOTDB"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == joystickFootDeadZoneRange)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    joystickFootDeadZoneRange = val;
+                    preferences.putInt(PREFERENCE_FOOTSTICK_DEADBAND, joystickFootDeadZoneRange);
+                    printf("Foot Joystick Deadband Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMDOMEDB"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == joystickDomeDeadZoneRange)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    joystickDomeDeadZoneRange = val;
+                    preferences.putInt(PREFERENCE_DOMESTICK_DEADBAND, joystickDomeDeadZoneRange);
+                    printf("Dome Joystick Deadband Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMDRIVEDB"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == driveDeadBandRange)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 127)
+                {
+                    driveDeadBandRange = val;
+                    preferences.putInt(PREFERENCE_DRIVE_DEADBAND, driveDeadBandRange);
+                    printf("Drive Controller Deadband Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
+            }
+            else if (startswith(cmd, "#SMINVERT"))
+            {
+                bool invert = (strtolu(cmd, &cmd) == 1);
+                if (invert == invertTurnDirection)
+                {
+                    printf("Unchanged.\n");
+                }
+                else
+                {
+                    invertTurnDirection = invert;
+                    preferences.putInt(PREFERENCE_INVERT_TURN_DIRECTION, invertTurnDirection);
+                    if (invert)
+                        printf("Invert Turn Direction Enabled.\n");
+                    else
+                        printf("Invert Turn Direction Disabled.\n");
+                }
+            }
+            else if (startswith(cmd, "#SMAUTOSPEED"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == domeAutoSpeed)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 100)
+                {
+                    domeAutoSpeed = val;
+                    preferences.putInt(PREFERENCE_DOME_AUTO_SPEED, domeAutoSpeed);
+                    printf("Auto Dome Speed Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 50-100\n");
+                }
+            }
+            else if (startswith(cmd, "#SMAUTOTIME"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == time360DomeTurn)
+                {
+                    printf("Unchanged.\n");
+                }
+                else if (val <= 8000)
+                {
+                    time360DomeTurn = val;
+                    preferences.putInt(PREFERENCE_DOME_DOME_TURN_TIME, time360DomeTurn);
+                    printf("Auto Dome Turn Time Changed.\n");
+                }
+                else
+                {
+                    printf("Must be in range 0-127\n");
+                }
             }
             else if (startswith(cmd, "#SMSET"))
             {
@@ -1201,7 +1463,7 @@ bool ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
                 if (footDriveSpeed != 0 || abs(turnnum) > 5)
                 {
                     SHADOW_VERBOSE("Motor: FootSpeed: %d\nTurnnum: %d\nTime of command: %lu\n", footDriveSpeed, turnnum, millis())              
-                    FootMotor->turn(turnnum * invertTurnDirection);
+                    FootMotor->turn(turnnum * (invertTurnDirection ? 1 : -1));
                     FootMotor->drive(footDriveSpeed);
                 }
                 else
