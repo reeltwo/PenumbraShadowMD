@@ -105,6 +105,12 @@
 // milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
 #define DEFAULT_AUTO_DOME_TURN_TIME         2500
 
+// Motor serial communication baud rate. Default 9600
+#define DEFAULT_MOTOR_BAUD                  9600
+
+// Marcduino serial communication baud rate. Default 9600
+#define DEFAULT_MARCDUINO_BAUD              9600
+
 #define PS3_CONTROLLER_FOOT_MAC       "XX:XX:XX:XX:XX:XX"  //Set this to your FOOT PS3 controller MAC address
 #define PS3_CONTROLLER_DOME_MAC       "XX:XX:XX:XX:XX:XX"  //Set to a secondary DOME PS3 controller MAC address (Optional)
 
@@ -157,6 +163,8 @@ int time360DomeTurn = DEFAULT_AUTO_DOME_TURN_TIME;
 #define PREFERENCE_INVERT_TURN_DIRECTION    "sminvertturn"
 #define PREFERENCE_DOME_AUTO_SPEED          "smdomeautospeed"
 #define PREFERENCE_DOME_DOME_TURN_TIME      "smdometurntime"
+#define PREFERENCE_MOTOR_BAUD               "smmotorbaud"
+#define PREFERENCE_MARCDUINO_BAUD           "smmarcbaud"
 Preferences preferences;
 #endif
 
@@ -313,7 +321,16 @@ public:
 
     void setAction(String newAction)
     {
-        preferences.putString(fName, newAction);
+        if (strlen(fName) > 15)
+        {
+            String key = fName;
+            key = key.substring(0, 15);
+            preferences.putString(key.c_str(), newAction);
+        }
+        else
+        {
+            preferences.putString(fName, newAction);
+        }
     }
 
     void trigger()
@@ -329,6 +346,12 @@ public:
 
     String action()
     {
+        if (strlen(fName) > 15)
+        {
+            String key = fName;
+            key = key.substring(0, 15);
+            return preferences.getString(key.c_str(), fDefaultAction);
+        }
         return preferences.getString(fName, fDefaultAction);
     }
 
@@ -410,10 +433,8 @@ MARCDUINO_ACTION(FTbtnDown_L1_MD, "#35")        // Arrow Down + L1
 //                          Drive Controller Settings
 // ---------------------------------------------------------------------------------------
 
-int motorControllerBaudRate = 9600; // Set the baud rate for the Syren motor controller
-                                    // for packetized options are: 2400, 9600, 19200 and 38400
-
-int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controller
+int motorControllerBaudRate = DEFAULT_MOTOR_BAUD;
+int marcDuinoBaudRate = DEFAULT_MARCDUINO_BAUD;
 
 #define FOOT_MOTOR_ADDR      128      // Serial Address for Foot Motor
 #define DOME_MOTOR_ADDR      129      // Serial Address for Dome Motor
@@ -831,6 +852,8 @@ void setup()
         invertTurnDirection = preferences.getBool(PREFERENCE_INVERT_TURN_DIRECTION, DEFAULT_INVERT_TURN_DIRECTION);
         domeAutoSpeed = preferences.getInt(PREFERENCE_DOME_AUTO_SPEED, DEFAULT_AUTO_DOME_SPEED);
         time360DomeTurn = preferences.getInt(PREFERENCE_DOME_DOME_TURN_TIME, DEFAULT_AUTO_DOME_TURN_TIME);
+        motorControllerBaudRate = preferences.getInt(PREFERENCE_MOTOR_BAUD, DEFAULT_MOTOR_BAUD);
+        marcDuinoBaudRate = preferences.getInt(PREFERENCE_MARCDUINO_BAUD, DEFAULT_MARCDUINO_BAUD);
     }
 #endif
     PrintReelTwoInfo(Serial, "Penumbra Shadow MD");
@@ -890,7 +913,7 @@ void setup()
 
 void sendMarcCommand(const char* cmd)
 {
-    SHADOW_VERBOSE("Sending MARC: \"%s\"\r", cmd)
+    SHADOW_VERBOSE("Sending MARC: \"%s\"\n", cmd)
     MD_SERIAL.print(cmd); MD_SERIAL.print("\r");
 #if defined(MARC_SOUND_PLAYER)
     sMarcSound.handleCommand(cmd);
@@ -899,7 +922,7 @@ void sendMarcCommand(const char* cmd)
 
 void sendBodyMarcCommand(const char* cmd)
 {
-    SHADOW_VERBOSE("Sending BODYMARC: \"%s\"\r", cmd)
+    SHADOW_VERBOSE("Sending BODYMARC: \"%s\"\n", cmd)
     BODY_MD_SERIAL.print(cmd); BODY_MD_SERIAL.print("\r");
 }
 
@@ -1022,6 +1045,7 @@ void loop()
             else if (startswith(cmd, "#SMCONFIG"))
             {
                 printf("Drive Speed Normal:  %3d (#SMNORMALSPEED) [0..127]\n", drivespeed1);
+                printf("Drive Speed Normal:  %3d (#SMNORMALSPEED) [0..127]\n", drivespeed1);
                 printf("Drive Speed Max:     %3d (#SMMAXSPEED)    [0..127]\n", drivespeed2);
                 printf("Turn Speed:          %3d (#SMTURNSPEED)   [0..127]\n", turnspeed);
                 printf("Dome Speed:          %3d (#SMDOMESPEED)   [0..127]\n", domespeed);
@@ -1032,6 +1056,8 @@ void loop()
                 printf("Invert Turn:         %3d (#SMINVERT)      [0..1]\n", invertTurnDirection);
                 printf("Dome Auto Speed:     %3d (#SMAUTOSPEED)   [50..100]\n", domeAutoSpeed);
                 printf("Dome Auto Time:     %4d (#SMAUTOTIME)    [2000..8000]\n", time360DomeTurn);
+                printf("Marcduino Baud:   %6d (#SMMARCBAUD)\n", marcDuinoBaudRate);
+                printf("Motor Baud:       %6d (#SMMOTORBAUD)\n", motorControllerBaudRate);
             }
             else if (startswith(cmd, "#SMSTARTUP"))
             {
@@ -1262,6 +1288,34 @@ void loop()
                     printf("Must be in range 0-127\n");
                 }
             }
+            else if (startswith(cmd, "#SMMOTORBAUD"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == motorControllerBaudRate)
+                {
+                    printf("Unchanged.\n");
+                }
+                else
+                {
+                    motorControllerBaudRate = val;
+                    preferences.putInt(PREFERENCE_MOTOR_BAUD, motorControllerBaudRate);
+                    printf("Motor Controller Serial Baud Rate Changed. Needs Reboot.\n");
+                }
+            }
+            else if (startswith(cmd, "#SMMARCBAUD"))
+            {
+                uint32_t val = strtolu(cmd, &cmd);
+                if (val == marcDuinoBaudRate)
+                {
+                    printf("Unchanged.\n");
+                }
+                else
+                {
+                    marcDuinoBaudRate = val;
+                    preferences.putInt(PREFERENCE_MARCDUINO_BAUD, marcDuinoBaudRate);
+                    printf("Marcduino Serial Baud Rate Changed. Needs Reboot.\n");
+                }
+            }
             else if (startswith(cmd, "#SMSET"))
             {
                 char* keyp = cmd;
@@ -1302,6 +1356,11 @@ void loop()
     if (MD_SERIAL.available())
     {
         int ch = MD_SERIAL.read();
+        Serial.print((char)ch);
+    }
+    if (BODY_MD_SERIAL.available())
+    {
+        int ch = BODY_MD_SERIAL.read();
         Serial.print((char)ch);
     }
 }

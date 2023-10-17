@@ -6,6 +6,7 @@ ESP32_FILESYSTEM=spiffs
 ESP32_FILESYSTEM_PART=spiffs
 ESP32_PARTSCHEME=min_spiffs
 ESP32_FLASHSIZE=16MB
+ESP32_DEBUGLEVEL=verbose
 GITHUB_REPOS= \
 reeltwo/Reeltwo \
 rimim/espsoftwareserial \

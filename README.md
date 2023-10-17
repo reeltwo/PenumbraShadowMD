@@ -96,7 +96,7 @@ Enable random sound playback.
 ### #SMSET _trigger_ _action_
 Set the button trigger (_trigger_) to the specified action (_action_).
 ```
-#SMSET btnUP_MD $83
+#SMSET btnUP_MD:$83
 ````
 ### #SMDEL _trigger_
 Reset command for specified trigger to sketch default.
@@ -173,4 +173,13 @@ Set the number of milliseconds for dome to complete 360 turn at #SMAUTOSPEED. De
 ```
 #SMAUTOTIME2500
 ```
-
+### #SMMOTORBAUD[2400..115200]
+Sets the baud rate of the packet serial connection to the motor controller. Default is 9600.
+```
+#SMMOTORBAUD9600
+```
+### #SMMARCBAUD[2400..115200]
+Sets the baud rate of the command seriall connection. Default is 9600.
+```
+#SMMARCBAUD9600
+```
