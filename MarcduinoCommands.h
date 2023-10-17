@@ -76,3 +76,7 @@
     "BM*MO99",
     "BM*MO00",
     "BM*MF10",
+    "BM*ON01",
+    "BM*OF01",
+    "BM*ON02",
+    "BM*OF02",
