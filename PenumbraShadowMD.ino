@@ -612,7 +612,35 @@ bool handleMarcduinoAction(const char* action)
     for (;;)
     {
         char buf[100];
-        if (*cmd == '$')
+        if (*cmd == '"')
+        {
+            // Skip the quote
+            cmd++;
+            char* marcCommand = cmd;
+            char* nextCmd = strchr(cmd, ',');
+            if (nextCmd != nullptr)
+            {
+                size_t len = nextCmd - marcCommand;
+                strncpy(buf, marcCommand, len);
+                buf[len] = '\0';
+                cmd = nextCmd;
+                marcCommand = buf;
+            }
+            else
+            {
+                cmd += strlen(marcCommand);
+            }
+            // If the commands starts with "BM" we direct it to the body marc controller
+            if (marcCommand[0] == 'B' && marcCommand[1] == 'M')
+            {
+                sendBodyMarcCommand(&marcCommand[2]);
+            }
+            else
+            {
+                sendMarcCommand(marcCommand);
+            }
+        }
+        else if (*cmd == '$')
         {
             char* mp3Cmd = cmd;
             char* nextCmd = strchr(cmd, ',');
@@ -1316,10 +1344,27 @@ void loop()
                     printf("Marcduino Serial Baud Rate Changed. Needs Reboot.\n");
                 }
             }
+            else if (startswith(cmd, "#SMPLAY"))
+            {
+                String key(cmd);
+                key.trim();
+                MarcduinoButtonAction* btn = MarcduinoButtonAction::findAction(key);
+                if (btn != nullptr)
+                {
+                    btn->trigger();
+                }
+                else
+                {
+                    printf("Trigger Not Found: %s\n", key.c_str());
+                }
+            }
             else if (startswith(cmd, "#SMSET"))
             {
+                // Skip whitespace
+                while (*cmd == ' ')
+                    cmd++;
                 char* keyp = cmd;
-                char* valp = strchr(cmd, ':');
+                char* valp = strchr(cmd, ' ');
                 if (valp != nullptr)
                 {
                     *valp++ = '\0';

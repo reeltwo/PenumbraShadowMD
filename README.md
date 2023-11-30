@@ -96,7 +96,13 @@ Enable random sound playback.
 ### #SMSET _trigger_ _action_
 Set the button trigger (_trigger_) to the specified action (_action_).
 ```
-#SMSET btnUP_MD:$83
+#SMSET btnUP_MD $83
+
+To send direct Marcduino commands prefix the command with " and separate with ,
+#SMSET btnUP_MD "BM:OP03,"BM*ON01
+#SMSET btnUP_CIRCLE_MD ":OP03,"BM*ON01
+
+" followed by BM is sent to body Marcduino
 ````
 ### #SMDEL _trigger_
 Reset command for specified trigger to sketch default.
