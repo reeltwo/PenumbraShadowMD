@@ -104,6 +104,11 @@ To send direct Marcduino commands prefix the command with " and separate with ,
 
 " followed by BM is sent to body Marcduino
 ````
+### #SMPLAY _trigger_
+Play any action associated with the specified trigger
+```
+#SMPLAY btnUP_MD
+````
 ### #SMDEL _trigger_
 Reset command for specified trigger to sketch default.
 ```
